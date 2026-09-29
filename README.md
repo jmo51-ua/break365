@@ -17,7 +17,7 @@ When **updating** a live site, upload only `index.html`, `style.css`, `app.js`, 
 
 ## How betting works
 
-- Everyone starts with the same points (1,000 by default, set in Admin > Points).
+- Points are **unlimited**: bet as much as you like on anything (up to 1,000,000 per bet). The **Ranking** is by profit: points won minus points lost.
 - A player picks one of three bets on a couple:
   - **+ Together**: they stay together for at least X weeks, months or years (the player chooses X),
   - **− Together**: they break up in less than X weeks, months or years (the player chooses X),

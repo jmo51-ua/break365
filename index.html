@@ -118,15 +118,6 @@
       </section>
 
       <section class="panel">
-        <h2>Points</h2>
-        <form id="settings-form" novalidate>
-          <label>Starting points for every player<input id="s-start" type="number" inputmode="numeric" min="10" max="1000000" step="1"></label>
-          <p id="settings-msg" class="msg" role="status" aria-live="polite"></p>
-          <button type="submit" class="btn btn-secondary">Save</button>
-        </form>
-      </section>
-
-      <section class="panel">
         <h2>Bets storage</h2>
         <div id="b-connected" hidden>
           <p>Bets are saved, encrypted, in the private repository <b id="b-where"></b>.</p>
@@ -223,13 +214,13 @@
           <p id="slip-me" class="slip-me" hidden>Betting as <b id="slip-me-name"></b> · <span id="slip-me-bal"></span> · <button type="button" class="linklike" id="slip-switch">Not you?</button></p>
           <p id="slip-mine" class="muted small" hidden></p>
           <p id="slip-rule" class="msg warn" hidden></p>
-          <label class="slip-stake">Stake (points)<input id="slip-stake" type="number" inputmode="numeric" min="1" step="1" value="100"></label>
+          <label class="slip-stake">Stake (points)<input id="slip-stake" type="number" inputmode="numeric" min="1" max="1000000" step="1" value="100"></label>
           <div class="chips" id="slip-chips">
             <button type="button" data-v="10">10</button>
             <button type="button" data-v="50">50</button>
             <button type="button" data-v="100">100</button>
             <button type="button" data-v="500">500</button>
-            <button type="button" data-v="all">All in</button>
+            <button type="button" data-v="1000">1000</button>
           </div>
           <p class="slip-return">If you win <b id="slip-return">0 pts</b></p>
           <p class="muted small">You get your points back plus a share of the wrong bets. It changes as others bet.</p>

@@ -32,7 +32,8 @@
   var POLL_MS = 10000, ERROR_MS = 20000, BACKOFF_MS = 60000, COUPLES_MS = 60000;
   var PIN_ITER = 100000;
   var PROFILE_KEY = 'break365.profile.v1';
-  var DEFAULT_START = 1000;
+  var DEFAULT_START = 1000; // kept only so older data files still load; points are unlimited
+  var MAX_STAKE = 1000000;
   var MAX_OPEN_LINES = 5;
   var MINUS = '−';
 
@@ -342,12 +343,12 @@
     return out;
   }
 
-  // Pure: same data and bets give the same balances in every browser.
+  // Pure: same data and bets give the same results in every browser.
+  // Points are unlimited: a player's score is their profit (points won minus points lost).
   function computeStats(data, bets) {
-    var start = data.settings.startPoints;
     var S = { players: Object.create(null), couples: Object.create(null), bets: Object.create(null) };
     Object.keys(bets.players).forEach(function (k) {
-      S.players[k] = { key: k, name: bets.players[k].name, balance: start, locked: 0, net: 0, won: 0, lost: 0, count: 0 };
+      S.players[k] = { key: k, name: bets.players[k].name, locked: 0, net: 0, won: 0, lost: 0, count: 0 };
     });
     var cmap = Object.create(null);
     data.couples.forEach(function (c) {
@@ -404,10 +405,6 @@
         pl.net += r.net;
       });
     });
-    Object.keys(S.players).forEach(function (k) {
-      var p = S.players[k];
-      p.balance = start + p.net - p.locked;
-    });
     return S;
   }
 
@@ -432,6 +429,7 @@
   }
   function fmtOdds(n) { return Number(n).toFixed(2); }
   function fmtPts(n) { return Math.round(n).toLocaleString('en-US') + ' pts'; }
+  function fmtSigned(n) { return n > 0 ? '+' + fmtPts(n) : n < 0 ? MINUS + fmtPts(-n) : '0 pts'; }
   function fmtPct(p) {
     var v = p * 100;
     if (v > 0 && v < 1) return '<1%';
@@ -620,7 +618,7 @@
   function renderMe() {
     var p = state.profile, s = p && state.stats && state.stats.players[p.key];
     $('me-chip').hidden = !s;
-    if (s) $('me-chip').textContent = s.name + ' · ' + fmtPts(s.balance);
+    if (s) $('me-chip').textContent = s.name + ' · ' + fmtSigned(s.net);
   }
 
   function renderBook() {
@@ -776,14 +774,14 @@
   function renderRanking() {
     var box = $('rank-list');
     box.textContent = '';
-    $('rank-note').textContent = 'Everyone starts with ' + fmtPts(state.data.settings.startPoints) +
-      '. On each line, the winners split all the points bet on it, in proportion to what they bet.';
+    $('rank-note').textContent = 'Points are unlimited: bet as much as you like. The ranking is by profit, points won minus points lost' +
+      '. Open bets count once their couple is settled.';
     if (state.betsStatus !== 'ok' || !state.stats) {
       box.appendChild(el('div', { class: 'empty', text: $('bets-status').textContent || 'Loading bets…' }));
       return;
     }
     var list = Object.keys(state.stats.players).map(function (k) { return state.stats.players[k]; })
-      .sort(function (x, y) { return y.balance - x.balance || (x.name < y.name ? -1 : 1); });
+      .sort(function (x, y) { return y.net - x.net || (x.name < y.name ? -1 : 1); });
     if (!list.length) { box.appendChild(el('div', { class: 'empty', text: 'Nobody has bet yet.' })); return; }
     var me = state.profile && state.profile.key, isAdmin = state.role === 'admin';
     list.forEach(function (p, i) {
@@ -793,7 +791,7 @@
           el('div', { class: 'names', text: p.name + (p.key === me ? ' (you)' : '') }),
           el('div', { class: 'meta', text: 'In play ' + fmtPts(p.locked) + ' · ' + p.won + ' won · ' + p.lost + ' lost' })
         ]),
-        el('span', { class: 'rank-bal', text: fmtPts(p.balance) }),
+        el('span', { class: 'rank-bal' + (p.net > 0 ? ' up' : p.net < 0 ? ' down' : ''), text: fmtSigned(p.net) }),
         isAdmin ? el('button', { type: 'button', class: 'btn btn-ghost btn-small', text: 'Reset PIN', onclick: function () { resetPin(p.key); } }) : null
       ]));
     });
@@ -892,11 +890,10 @@
     var myPts = 0;
     if (me) {
       $('slip-me-name').textContent = me.name;
-      $('slip-me-bal').textContent = fmtPts(me.balance) + ' available';
+      $('slip-me-bal').textContent = 'profit ' + fmtSigned(me.net);
       if (!problem && mk && hasOpposite(cs, mk, sel.side, me.key)) {
         problem = 'You already bet ' + betLabel(mk, sel.side === 'over' ? 'under' : 'over') + '. You cannot bet both + and ' + MINUS + ' for the same time.';
       }
-      if (!problem && me.balance < 1) problem = 'You have no points left.';
       if (pr) pr.list.forEach(function (r) { if (r.bet.k === me.key) myPts += r.bet.p; });
     }
     $('slip-mine').textContent = myPts ? 'You have ' + fmtPts(myPts) + ' on this bet.' : '';
@@ -933,6 +930,7 @@
       if (!/^\d{4,8}$/.test(pinIn)) { setMsg('slip-msg', 'Your PIN must be 4 to 8 digits.', 'error'); return; }
     }
     if (!Number.isInteger(stake) || stake < 1) { setMsg('slip-msg', 'Enter a whole number of points.', 'error'); return; }
+    if (stake > MAX_STAKE) { setMsg('slip-msg', 'The biggest single bet is ' + fmtPts(MAX_STAKE) + '.', 'error'); return; }
     state.placing = true;
     setMsg('slip-msg', '');
     renderSlip();
@@ -959,8 +957,6 @@
           }
         }
         var S = computeStats(state.data, latest);
-        var me = S.players[key];
-        if (stake > me.balance) throw userErr('You only have ' + fmtPts(Math.max(0, me.balance)) + ' available.');
         if (hasOpposite(S.couples[c.id], mk, side, key)) throw userErr('You already bet ' + betLabel(mk, side === 'over' ? 'under' : 'over') + '. You cannot bet both + and ' + MINUS + ' for the same time.');
         latest.bets.push({ id: newId(), c: c.id, m: mk, s: side, p: stake, k: key, t: Date.now() });
         return latest;
@@ -1223,7 +1219,6 @@
           ])
         ]));
       });
-    if (document.activeElement !== $('s-start')) $('s-start').value = String(state.data.settings.startPoints);
     renderBetsConn();
     renderSyncState();
   }
@@ -1300,14 +1295,6 @@
     resetForm();
     commit({ t: 'upsert', c: couple });
     setMsg('form-msg', done, 'ok');
-  }
-
-  function saveSettings(ev) {
-    ev.preventDefault();
-    var n = validStart($('s-start').value);
-    if (n === null) { setMsg('settings-msg', 'Starting points must be a whole number from 10 to 1,000,000.', 'error'); return; }
-    commit({ t: 'settings', s: { startPoints: n } });
-    setMsg('settings-msg', 'Saved. Every player now starts with ' + fmtPts(n) + '.', 'ok');
   }
 
   function siteRepoGuess() {
@@ -1580,13 +1567,7 @@
   $('slip-chips').addEventListener('click', function (e) {
     var b = e.target.closest('button');
     if (!b) return;
-    var v = b.getAttribute('data-v');
-    if (v === 'all') {
-      var me = state.profile && state.stats && state.stats.players[state.profile.key];
-      if (!me) return;
-      v = String(Math.max(0, me.balance));
-    }
-    $('slip-stake').value = v;
+    $('slip-stake').value = b.getAttribute('data-v');
     updateReturn();
   });
   $('slip-form').addEventListener('submit', placeBet);
@@ -1602,7 +1583,6 @@
     $('f-married-wrap').hidden = !this.checked;
     if (this.checked && !$('f-married-on').value) $('f-married-on').value = toISO(today());
   });
-  $('settings-form').addEventListener('submit', saveSettings);
   $('b-form').addEventListener('submit', saveBetsConn);
   $('b-change').addEventListener('click', function () { state.betsEditing = true; prefillBets(); setMsg('b-msg', ''); renderBetsConn(); });
   $('b-cancel').addEventListener('click', function () { state.betsEditing = false; setMsg('b-msg', ''); renderBetsConn(); });

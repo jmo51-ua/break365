@@ -234,6 +234,8 @@ legend { font-size: 13px; color: var(--muted); padding: 0 4px; }
 .rank-pos { width: 26px; height: 26px; border-radius: 50%; background: var(--bg); display: grid; place-items: center; font-weight: 800; font-size: 13px; flex: none; }
 .rank-main { flex: 1; min-width: 0; }
 .rank-bal { font-weight: 800; font-size: 16px; }
+.rank-bal.up { color: var(--win); }
+.rank-bal.down { color: var(--error); }
 .icon-btn.small { font-size: 18px; }
 
 /* Admin */
