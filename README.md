@@ -17,24 +17,24 @@ When **updating** a live site, upload only `index.html`, `style.css`, `app.js`, 
 
 ## How betting works
 
-- Points are **unlimited**: bet as much as you like on anything (up to 1,000,000 per bet). The **Ranking** is by profit: points won minus points lost.
+- Bets are in **€** (play money, nothing is ever paid) and **unlimited**: bet as much as you like (up to €1,000,000 per bet). The **Ranking** is by profit: money won minus money lost.
 - A player picks one of three bets on a couple:
   - **+ Together**: they stay together for at least X weeks, months or years (the player chooses X),
   - **− Together**: they break up in less than X weeks, months or years (the player chooses X),
   - **Married**: they get married.
-- All bets on a couple go into **one pot**. When the couple is settled, everyone who got it right gets their points back plus a share of the wrong bets, in proportion to what they bet.
-  Example: 100 on +4 months, 300 on −4 months, 100 on Married. They break up after 2 months: only −4 months is right, so its bettors get their 300 back plus the 200 from the others (×1.67).
-- Each bet shows its points, its share of the pot and **up to ×**: the most each point can return if it comes true, given the bets so far. It changes live as people bet.
+- All bets on a couple go into **one pot**. When the couple is settled, everyone who got it right gets their stake back plus a share of the wrong bets, in proportion to what they bet.
+  Example: €100 on +4 months, €300 on −4 months, €100 on Married. They break up after 2 months: only −4 months is right, so its bettors get their €300 back plus the €200 from the others (×1.67).
+- Each bet shows its money, its share of the pot and **up to ×**: the most each euro can return if it comes true, given the bets so far. It changes live as people bet.
 - You can place as many bets as you like, but not **+** and **−** for the same time.
-- If nobody got it right, everyone gets their points back.
+- If nobody got it right, everyone gets their money back.
 
 When the couple is settled (the admin records it with **Edit**):
 
 - **Break-up**: every **+X** whose date is after the break-up wins, every **−X** whose date is on or after it wins, **Married** loses.
 - **Wedding**: **Married** and every **+** bet win, every **−** bet loses. The couple moves to **Settled**.
-- A **+X** or **−X** can only be placed while its date is still in the future. Once the date passes, the card shows it as already true or lost; points are paid when the couple is settled.
+- A **+X** or **−X** can only be placed while its date is still in the future. Once the date passes, the card shows it as already true or lost; winnings are paid when the couple is settled.
 - Bets placed on or after the break-up or wedding day are refunded (so nobody profits from news before the admin updates the couple).
-- Deleting a couple cancels its bets and returns the points.
+- Deleting a couple cancels its bets and returns the money.
 
 ## One-time setup (site owner, about 10 minutes)
 
@@ -57,19 +57,19 @@ The page refuses a public repository, the site repository, or the admin token he
 
 ## Admin, day to day
 
-- **Add couple**: Name 1, Name 2 and the date they started dating. Nothing else.
-- **Broke up**: Edit > Status *Broken up* > date > save. Bets are settled and points paid out automatically.
-- **Married**: Edit > tick *They got married* > date > save.
+- **Add couple**: Name 1, Name 2 and the date they started dating, typed as **DD/MM/YYYY** (just typing the 8 digits fills in the slashes). Nothing else.
+- **Broke up**: Edit > Status *Broken up* > date (DD/MM/YYYY) > save. Bets are settled and winnings paid out automatically.
+- **Married**: Edit > tick *They got married* > date (DD/MM/YYYY) > save.
 - Every change publishes by itself; the bar at the top says **All changes published**.
-- On a couple's bet list, **×** deletes a bet (points go back). In **Ranking**, **Reset PIN** lets a player who forgot their PIN choose a new one (points and bets stay).
+- On a couple's bet list, **×** deletes a bet (the money goes back). In **Ranking**, **Reset PIN** lets a player who forgot their PIN choose a new one (their money and bets stay).
 
 ## Players
 
 1. Open the site, type the player password.
-2. Tap a bet that already exists on a couple, or **Make your own bet**: choose **+ Together**, **− Together** or **Married**; for + and − also pick the number and weeks, months or years.
+2. Press **Make your bet** on a couple (or tap a bet someone already made): choose **+ Together**, **− Together** or **Married**; for + and − also pick the number and weeks, months or years.
 3. First time: pick a name and a 4 to 8 digit PIN. The device remembers it; use the same name and PIN on other devices.
-4. Choose the stake and **Place bet**. Odds on every card update every 10 seconds.
-5. **Ranking** shows everyone's points.
+4. Choose the stake in € and **Place bet**. Odds on every card update every 10 seconds.
+5. **Ranking** shows everyone's profit.
 
 ## Privacy and security
 

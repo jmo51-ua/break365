@@ -9,7 +9,7 @@
  * Betting model (one pot per couple, like Twitch predictions):
  *  - A bet is +N (still together after N weeks/months/years), -N (broken up within N) or Married.
  *  - All bets on a couple share one pot. When the couple is settled (break-up or wedding), everyone
- *    who got it right gets their points back plus a share of the wrong bets, in proportion to stake.
+ *    who got it right gets their stake back plus a share of the wrong bets, in proportion to stake.
  *  - A wedding settles the couple: Married and every + bet win, every - bet loses.
  *  - Bets placed on or after the settling day, or after their own date, are refunded.
  */
@@ -132,6 +132,25 @@
     var p = isoParts(s), m = p[1] - 1 + n;
     var last = new Date(Date.UTC(p[0], m + 1, 0)).getUTCDate();
     return new Date(Date.UTC(p[0], m, Math.min(p[2], last))).toISOString().slice(0, 10);
+  }
+  // Admin date fields are typed as DD/MM/YYYY and stored as YYYY-MM-DD.
+  function parseDMY(str) {
+    var m = /^\s*(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})\s*$/.exec(str || '');
+    if (!m) return '';
+    var iso = m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+    return isISODate(iso) ? iso : '';
+  }
+  function toDMY(iso) { return iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : ''; }
+  // Typing only digits fills in the slashes: 01092026 -> 01/09/2026.
+  function autoSlash(input) {
+    var v = input.value;
+    if (!/^[\d\/]*$/.test(v)) return;
+    // leave it alone if the person typed their own slashes (e.g. 1/9/2026)
+    for (var i = 0; i < v.length; i++) if (v[i] === '/' && i !== 2 && i !== 5) return;
+    var d = v.replace(/\D/g, '').slice(0, 8);
+    var out = d.length > 4 ? d.slice(0, 2) + '/' + d.slice(2, 4) + '/' + d.slice(4)
+      : d.length > 2 ? d.slice(0, 2) + '/' + d.slice(2) : d;
+    if (out !== v) input.value = out;
   }
   function utcDay(t) { return new Date(t).toISOString().slice(0, 10); }
   function validStart(n) { n = Number(n); return Number.isInteger(n) && n >= 10 && n <= 1000000 ? n : null; }
@@ -428,8 +447,9 @@
     m.className = 'msg' + (kind ? ' ' + kind : '');
   }
   function fmtOdds(n) { return Number(n).toFixed(2); }
-  function fmtPts(n) { return Math.round(n).toLocaleString('en-US') + ' pts'; }
-  function fmtSigned(n) { return n > 0 ? '+' + fmtPts(n) : n < 0 ? MINUS + fmtPts(-n) : '0 pts'; }
+  // Amounts are shown as euros (play money, nothing is ever paid).
+  function fmtPts(n) { return '€' + Math.round(n).toLocaleString('en-US'); }
+  function fmtSigned(n) { return n > 0 ? '+' + fmtPts(n) : n < 0 ? MINUS + fmtPts(-n) : fmtPts(0); }
   function fmtPct(p) {
     var v = p * 100;
     if (v > 0 && v < 1) return '<1%';
@@ -684,11 +704,12 @@
       }
       shown.forEach(function (pr) { rows.push(predRow(c, cs, pr.m, pr.s, true)); });
       if (dur.length > shown.length) {
-        rows.push(el('p', { class: 'muted small more', text: (dur.length - shown.length) + ' more bets. Use Make your own bet to pick any time.' }));
+        rows.push(el('p', { class: 'muted small more', text: (dur.length - shown.length) + ' more bets. Use Make your bet to pick any time.' }));
       }
-      rows.push(predRow(c, cs, 'wed', 'yes', true));
+      // Married only appears once someone has bet on it; otherwise it is chosen inside the bet menu.
+      if (cs && cs.preds.wed) rows.push(predRow(c, cs, 'wed', 'yes', true));
       rows.push(el('button', {
-        type: 'button', class: 'btn btn-secondary btn-block make-bet', text: '+ Make your own bet',
+        type: 'button', class: 'btn btn-secondary btn-block make-bet', text: 'Make your bet',
         onclick: function () { select({ id: c.id, side: 'over', n: '', u: 'm' }, true); }
       }));
     } else if (!preds.length) {
@@ -696,7 +717,7 @@
     } else {
       rows.push(el('p', { class: 'settle-note', text: cs.refundedAll
         ? 'Nobody got it right, so every bet was refunded.'
-        : 'Winners split ' + fmtPts(cs.losers) + ' from the wrong bets (×' + fmtOdds(cs.ratio) + ' on every point).' }));
+        : 'Winners split ' + fmtPts(cs.losers) + ' from the wrong bets (×' + fmtOdds(cs.ratio) + ' on every euro).' }));
       preds.sort(function (x, y) {
         var wx = predWins(c, x.m, x.s), wy = predWins(c, y.m, y.s);
         return wx !== wy ? (wx ? -1 : 1) : y.total - x.total;
@@ -774,7 +795,7 @@
   function renderRanking() {
     var box = $('rank-list');
     box.textContent = '';
-    $('rank-note').textContent = 'Points are unlimited: bet as much as you like. The ranking is by profit, points won minus points lost' +
+    $('rank-note').textContent = 'Money is unlimited: bet as much as you like. The ranking is by profit, money won minus money lost' +
       '. Open bets count once their couple is settled.';
     if (state.betsStatus !== 'ok' || !state.stats) {
       box.appendChild(el('div', { class: 'empty', text: $('bets-status').textContent || 'Loading bets…' }));
@@ -873,7 +894,7 @@
     $('slip-odds').textContent = !mk ? '' : u0 ? 'up to ×' + fmtOdds(u0) : 'New';
     $('slip-pool').textContent = !mk ? '' : pot
       ? 'Pot of this couple: ' + fmtPts(pot) + '. On this bet: ' + fmtPts(mine) + ' (' + fmtPct(mine / pot) + ').'
-      : 'Nobody has bet on this couple yet. Winners only win points that others bet wrong.';
+      : 'Nobody has bet on this couple yet. Winners only win what others bet wrong.';
 
     var ready = state.betsStatus === 'ok' && !!state.stats;
     var stateMsg = state.betsStatus === 'off' ? 'Betting is not set up yet.'
@@ -909,7 +930,7 @@
     var sel = state.selection, c = sel && findCouple(sel.id), mk = slipMk(sel);
     var stake = Number($('slip-stake').value);
     if (!c || !mk || !Number.isInteger(stake) || stake < 1) {
-      $('slip-return').textContent = '0 pts';
+      $('slip-return').textContent = fmtPts(0);
       return;
     }
     var mult = upTo(c, state.stats && state.stats.couples[c.id], mk, sel.side, stake);
@@ -929,7 +950,7 @@
       if (!nameIn) { setMsg('slip-msg', 'Enter your name.', 'error'); return; }
       if (!/^\d{4,8}$/.test(pinIn)) { setMsg('slip-msg', 'Your PIN must be 4 to 8 digits.', 'error'); return; }
     }
-    if (!Number.isInteger(stake) || stake < 1) { setMsg('slip-msg', 'Enter a whole number of points.', 'error'); return; }
+    if (!Number.isInteger(stake) || stake < 1) { setMsg('slip-msg', 'Enter a whole amount in euros.', 'error'); return; }
     if (stake > MAX_STAKE) { setMsg('slip-msg', 'The biggest single bet is ' + fmtPts(MAX_STAKE) + '.', 'error'); return; }
     state.placing = true;
     setMsg('slip-msg', '');
@@ -1099,7 +1120,7 @@
     var r = state.stats && state.stats.bets[id];
     if (!r) return;
     var pl = state.stats.players[r.bet.k];
-    if (!confirm('Delete the bet of ' + (pl ? pl.name : '?') + ' (' + betLabel(r.bet.m, r.bet.s) + ', ' + fmtPts(r.bet.p) + ')? The points go back.')) return;
+    if (!confirm('Delete the bet of ' + (pl ? pl.name : '?') + ' (' + betLabel(r.bet.m, r.bet.s) + ', ' + fmtPts(r.bet.p) + ')? The money goes back.')) return;
     try {
       await betsTxn(function (latest) {
         latest.bets = latest.bets.filter(function (b) { return b.id !== id; });
@@ -1110,7 +1131,7 @@
 
   async function resetPin(key) {
     var pl = state.stats && state.stats.players[key];
-    if (!pl || !confirm('Reset the PIN of ' + pl.name + '? Next time they bet they choose a new PIN. Their points and bets stay.')) return;
+    if (!pl || !confirm('Reset the PIN of ' + pl.name + '? Next time they bet they choose a new PIN. Their money and bets stay.')) return;
     try {
       await betsTxn(function (latest) {
         if (latest.players[key]) { latest.players[key].hash = ''; latest.players[key].salt = ''; }
@@ -1226,9 +1247,6 @@
   function resetForm() {
     $('couple-form').reset();
     $('f-id').value = '';
-    $('f-since').max = toISO(today());
-    $('f-ended').max = toISO(today());
-    $('f-married-on').max = toISO(today());
     $('f-ended-wrap').hidden = true;
     $('f-married-wrap').hidden = true;
     $('f-outcome').hidden = true;
@@ -1244,12 +1262,12 @@
     $('f-id').value = c.id;
     $('f-a').value = c.a;
     $('f-b').value = c.b;
-    $('f-since').value = c.since;
+    $('f-since').value = toDMY(c.since);
     $('f-status').value = c.status;
-    $('f-ended').value = c.endedOn;
+    $('f-ended').value = toDMY(c.endedOn);
     $('f-ended-wrap').hidden = c.status !== 'ended';
     $('f-married').checked = !!c.marriedOn;
-    $('f-married-on').value = c.marriedOn;
+    $('f-married-on').value = toDMY(c.marriedOn);
     $('f-married-wrap').hidden = !c.marriedOn;
     $('f-outcome').hidden = false;
     $('form-title').textContent = 'Edit couple';
@@ -1263,7 +1281,7 @@
     var c = findCouple(id);
     if (!c) return;
     var cs = state.stats && state.stats.couples[id], n = cs ? cs.list.length : 0;
-    if (!confirm('Delete ' + coupleName(c) + '?' + (n ? ' Their ' + n + (n === 1 ? ' bet is' : ' bets are') + ' cancelled and the points go back.' : ''))) return;
+    if (!confirm('Delete ' + coupleName(c) + '?' + (n ? ' Their ' + n + (n === 1 ? ' bet is' : ' bets are') + ' cancelled and the money goes back.' : ''))) return;
     if (state.selection && state.selection.id === id) state.selection = null;
     if ($('f-id').value === id) resetForm();
     commit({ t: 'delete', id: id });
@@ -1275,15 +1293,15 @@
     var a = cleanText($('f-a').value, 60), b = cleanText($('f-b').value, 60);
     var id = $('f-id').value, editing = !!id;
     // Adding a couple only needs the names and the dating date. What happened is set later, on Edit.
-    var since = $('f-since').value, status = editing ? $('f-status').value : 'active', ended = $('f-ended').value;
-    var married = editing && $('f-married').checked, marriedOn = $('f-married-on').value;
+    var since = parseDMY($('f-since').value), status = editing ? $('f-status').value : 'active', ended = parseDMY($('f-ended').value);
+    var married = editing && $('f-married').checked, marriedOn = parseDMY($('f-married-on').value);
     var err = !a || !b ? 'Enter both names.'
-      : !isISODate(since) ? 'Enter the date they got together.'
+      : !isISODate(since) ? 'Enter the date they started dating as DD/MM/YYYY, for example 01/09/2026.'
       : since > todayISO ? 'The start date cannot be in the future.'
-      : status === 'ended' && !isISODate(ended) ? 'Enter the break-up date.'
+      : status === 'ended' && !isISODate(ended) ? 'Enter the break-up date as DD/MM/YYYY.'
       : status === 'ended' && ended < since ? 'The break-up date cannot be before the start date.'
       : status === 'ended' && ended > todayISO ? 'The break-up date cannot be in the future.'
-      : married && !isISODate(marriedOn) ? 'Enter the wedding date.'
+      : married && !isISODate(marriedOn) ? 'Enter the wedding date as DD/MM/YYYY.'
       : married && marriedOn < since ? 'The wedding date cannot be before the start date.'
       : married && marriedOn > todayISO ? 'The wedding date cannot be in the future.'
       : married && status === 'ended' && marriedOn > ended ? 'The wedding date cannot be after the break-up date.'
@@ -1575,13 +1593,16 @@
 
   $('couple-form').addEventListener('submit', saveCouple);
   $('f-cancel').addEventListener('click', resetForm);
+  ['f-since', 'f-ended', 'f-married-on'].forEach(function (id) {
+    $(id).addEventListener('input', function () { autoSlash(this); });
+  });
   $('f-status').addEventListener('change', function () {
     $('f-ended-wrap').hidden = this.value !== 'ended';
-    if (this.value === 'ended' && !$('f-ended').value) $('f-ended').value = toISO(today());
+    if (this.value === 'ended' && !$('f-ended').value) $('f-ended').value = toDMY(toISO(today()));
   });
   $('f-married').addEventListener('change', function () {
     $('f-married-wrap').hidden = !this.checked;
-    if (this.checked && !$('f-married-on').value) $('f-married-on').value = toISO(today());
+    if (this.checked && !$('f-married-on').value) $('f-married-on').value = toDMY(toISO(today()));
   });
   $('b-form').addEventListener('submit', saveBetsConn);
   $('b-change').addEventListener('click', function () { state.betsEditing = true; prefillBets(); setMsg('b-msg', ''); renderBetsConn(); });

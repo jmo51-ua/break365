@@ -61,7 +61,7 @@
         <span><b>+</b> together for at least that long</span>
         <span><b>&minus;</b> broken up in less than that</span>
         <span><b>Married</b> they get married</span>
-        <span>Winners of a couple split the points of the wrong bets</span>
+        <span>Winners of a couple split the money of the wrong bets</span>
       </div>
       <div id="couple-list" class="couple-list"></div>
     </main>
@@ -90,7 +90,7 @@
             <label>Partner 1<input id="f-a" type="text" maxlength="60" required autocomplete="off"></label>
             <label>Partner 2<input id="f-b" type="text" maxlength="60" required autocomplete="off"></label>
           </div>
-          <label>Dating since<input id="f-since" type="date" required></label>
+          <label>Dating since (DD/MM/YYYY)<input id="f-since" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" autocomplete="off" required></label>
           <fieldset id="f-outcome" class="outcome" hidden>
             <legend>What happened (settles the bets)</legend>
             <label>Status
@@ -99,9 +99,9 @@
                 <option value="ended">Broken up</option>
               </select>
             </label>
-            <label id="f-ended-wrap" hidden>Broke up on<input id="f-ended" type="date"></label>
+            <label id="f-ended-wrap" hidden>Broke up on (DD/MM/YYYY)<input id="f-ended" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" autocomplete="off"></label>
             <label class="check"><input id="f-married" type="checkbox"> They got married</label>
-            <label id="f-married-wrap" hidden>Wedding date<input id="f-married-on" type="date"></label>
+            <label id="f-married-wrap" hidden>Wedding date (DD/MM/YYYY)<input id="f-married-on" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" autocomplete="off"></label>
           </fieldset>
           <p class="muted small">Players choose their own bets and the odds come from those bets. When a couple breaks up or marries, press Edit and record it here.</p>
           <p id="form-msg" class="msg" role="status" aria-live="polite"></p>
@@ -179,7 +179,7 @@
         <h2>Bet slip</h2>
         <button id="slip-close" class="icon-btn" type="button" aria-label="Close bet slip">×</button>
       </div>
-      <div id="slip-empty" class="slip-empty">Tap a bet on a couple, or <b>Make your own bet</b>.</div>
+      <div id="slip-empty" class="slip-empty">Tap <b>Make your bet</b> on a couple, or tap a bet someone already made.</div>
       <div id="slip-body" hidden>
         <p id="slip-couple" class="slip-couple"></p>
         <div class="seg" id="slip-side" role="group" aria-label="Your bet">
@@ -214,16 +214,16 @@
           <p id="slip-me" class="slip-me" hidden>Betting as <b id="slip-me-name"></b> · <span id="slip-me-bal"></span> · <button type="button" class="linklike" id="slip-switch">Not you?</button></p>
           <p id="slip-mine" class="muted small" hidden></p>
           <p id="slip-rule" class="msg warn" hidden></p>
-          <label class="slip-stake">Stake (points)<input id="slip-stake" type="number" inputmode="numeric" min="1" max="1000000" step="1" value="100"></label>
+          <label class="slip-stake">Stake (€)<input id="slip-stake" type="number" inputmode="numeric" min="1" max="1000000" step="1" value="100"></label>
           <div class="chips" id="slip-chips">
-            <button type="button" data-v="10">10</button>
-            <button type="button" data-v="50">50</button>
-            <button type="button" data-v="100">100</button>
-            <button type="button" data-v="500">500</button>
-            <button type="button" data-v="1000">1000</button>
+            <button type="button" data-v="10">€10</button>
+            <button type="button" data-v="50">€50</button>
+            <button type="button" data-v="100">€100</button>
+            <button type="button" data-v="500">€500</button>
+            <button type="button" data-v="1000">€1000</button>
           </div>
-          <p class="slip-return">If you win <b id="slip-return">0 pts</b></p>
-          <p class="muted small">You get your points back plus a share of the wrong bets. It changes as others bet.</p>
+          <p class="slip-return">If you win <b id="slip-return">€0</b></p>
+          <p class="muted small">You get your stake back plus a share of the wrong bets. It changes as others bet.</p>
           <button type="submit" id="slip-go" class="btn btn-primary btn-block">Place bet</button>
           <p id="slip-msg" class="msg" role="status" aria-live="polite"></p>
         </form>
