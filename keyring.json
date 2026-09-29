@@ -9,7 +9,11 @@
     "admin": {
       "salt": "Myao6ply78QsIEeLJZOPLw==",
       "iv": "39mzbEmpfN7C6Cf7",
-      "wrapped": "BfZRkqwgMF2TVkB38yu8ApOSgadnZF2tZjlOdEYDH1iONqUNFrCoDN568NsE+6LZ"
+      "wrapped": "BfZRkqwgMF2TVkB38yu8ApOSgadnZF2tZjlOdEYDH1iONqUNFrCoDN568NsE+6LZ",
+      "secrets": {
+        "iv": "p0oYkPb3oKLqoFL/",
+        "ct": "/Ar1KgSaTw6E1ybmdKdEYOnZTb7+1PO3dWX4RLXIClvshJ5jroxuvK9lcAJNLWoWyaf5Qo18TjlSSIC22dNk/edKjkr7ar5ex8id4wGlXhhu2b5nuEruQ2mgaH/I+9ukS6232upvsgp3NIm7HsLsZGFKrXj5I5rMU2QyB6iKhed11Evyb47PzP+/TpmURCL4hg1n+k+qlfpJ9GcjoVEyZ67FfvQwLRlNnOkieF0Qmlm/hMRk26vW"
+      }
     },
     "user": {
       "salt": "HhU3OV0LT9p4fnK/2mmIQw==",
