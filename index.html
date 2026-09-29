@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://api.github.com https://api.manifold.markets; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'">
 <meta name="theme-color" content="#0f1115">
 <title>Break365</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230f1115'/%3E%3Cpath d='M32 54C12 40 6 29 9 19c3-10 16-12 23-3 7-9 20-7 23 3 3 10-3 21-23 35z' fill='%23ff3d68'/%3E%3Cpath d='M32 16l-5 10 8 6-6 9 3 9' fill='none' stroke='%230f1115' stroke-width='3' stroke-linejoin='round'/%3E%3C/svg%3E">
@@ -24,7 +24,7 @@
       <button type="submit" id="login-btn" class="btn btn-primary" disabled>Loading…</button>
       <p id="login-msg" class="msg" role="status" aria-live="polite"></p>
     </form>
-    <p class="fineprint">Private. The password is checked and the data is decrypted only inside your browser. Nothing is sent anywhere.</p>
+    <p class="fineprint">Private. The password is checked and the data is decrypted only inside your browser.</p>
   </div>
 </section>
 
@@ -34,6 +34,7 @@
     <div class="topbar-inner">
       <div class="brand" aria-label="Break365"><span class="brand-break">break</span><span class="brand-num">365</span></div>
       <div class="topbar-right">
+        <button id="me-chip" class="me-chip" type="button" hidden></button>
         <span id="role-badge" class="badge"></span>
         <button id="logout-btn" class="btn btn-ghost" type="button">Log out</button>
       </div>
@@ -43,6 +44,7 @@
         <button class="tab is-active" type="button" data-view="live">Live</button>
         <button class="tab" type="button" data-view="settled">Settled</button>
         <button class="tab" type="button" data-view="all">All</button>
+        <button class="tab" type="button" data-view="ranking">Ranking</button>
         <button class="tab tab-admin" type="button" data-view="admin" hidden>Admin <span id="dirty-dot" class="dot" hidden></span></button>
       </div>
     </nav>
@@ -54,12 +56,22 @@
         <h1 id="book-title">Live couples</h1>
         <input id="search" class="search" type="search" placeholder="Search names" aria-label="Search couples" autocomplete="off">
       </div>
+      <p id="bets-status" class="bets-status" role="status" aria-live="polite"></p>
       <div class="rules">
-        <span><b>+Weeks</b> ends before 3 months</span>
-        <span><b>+Months</b> ends between 3 and 12 months</span>
-        <span><b>+Years</b> lasts 1 year or more</span>
+        <span><b>+</b> still together after that time</span>
+        <span><b>&minus;</b> broken up by then</span>
+        <span>Odds = all points on a line ÷ points on your side</span>
       </div>
       <div id="couple-list" class="couple-list"></div>
+    </main>
+
+    <!-- RANKING -->
+    <main id="ranking" class="ranking" hidden>
+      <section class="panel">
+        <h1>Ranking</h1>
+        <p id="rank-note" class="muted small"></p>
+        <div id="rank-list" class="rank-list"></div>
+      </section>
     </main>
 
     <!-- ADMIN -->
@@ -68,6 +80,7 @@
         <span id="sync-text"></span>
         <button type="button" class="btn btn-secondary btn-small" id="sync-retry" hidden>Try again</button>
       </div>
+
       <section class="panel">
         <h2 id="form-title">Add couple</h2>
         <form id="couple-form" novalidate>
@@ -80,24 +93,16 @@
             <label>Together since<input id="f-since" type="date" required></label>
             <label>Status
               <select id="f-status">
-                <option value="active">Together (live)</option>
-                <option value="ended">Broken up (settle)</option>
+                <option value="active">Together</option>
+                <option value="ended">Broken up</option>
               </select>
             </label>
           </div>
           <label id="f-ended-wrap" hidden>Broke up on<input id="f-ended" type="date"></label>
-          <fieldset class="odds-fields">
-            <legend>House odds (decimal, used when there is no live Manifold market)</legend>
-            <div class="grid3">
-              <label>+Weeks<input id="f-o-weeks" type="number" inputmode="decimal" min="1.01" max="1000" step="0.01" required></label>
-              <label>+Months<input id="f-o-months" type="number" inputmode="decimal" min="1.01" max="1000" step="0.01" required></label>
-              <label>+Years<input id="f-o-years" type="number" inputmode="decimal" min="1.01" max="1000" step="0.01" required></label>
-            </div>
-          </fieldset>
-          <label>Betting link (https, optional). A Manifold market link gives live % and odds<input id="f-url" type="url" inputmode="url" placeholder="https://manifold.markets/username/market-name" autocomplete="off"></label>
-          <p class="muted small hint">On Manifold, create a multiple-choice market with exactly three answers: Weeks, Months, Years (Semanas, Meses, Años also work).</p>
-          <button type="button" class="btn btn-secondary btn-small" id="f-check">Check Manifold market</button>
+          <label class="check"><input id="f-married" type="checkbox"> They got married</label>
+          <label id="f-married-wrap" hidden>Wedding date<input id="f-married-on" type="date"></label>
           <label>Note (optional)<input id="f-note" type="text" maxlength="140" autocomplete="off"></label>
+          <p class="muted small">No odds to set: players create the lines and the odds come from their bets. Lines are decided automatically from these dates.</p>
           <p id="form-msg" class="msg" role="status" aria-live="polite"></p>
           <div class="row">
             <button type="submit" class="btn btn-primary" id="f-save">Add couple</button>
@@ -112,14 +117,34 @@
       </section>
 
       <section class="panel">
-        <h2>Betting settings</h2>
+        <h2>Points</h2>
         <form id="settings-form" novalidate>
-          <label>Default betting link, used for every couple without its own link (https)<input id="s-url" type="url" inputmode="url" autocomplete="off" placeholder="https://manifold.markets/..."></label>
-          <label>House margin on live odds, % (0 = fair odds, 5 = bookmaker style)<input id="s-margin" type="number" inputmode="decimal" min="0" max="25" step="0.5" value="0"></label>
-          <p class="muted small">Live odds = (1 − margin) ÷ Manifold probability. Example: 40% with 0 margin gives 2.50.</p>
+          <label>Starting points for every player<input id="s-start" type="number" inputmode="numeric" min="10" max="1000000" step="1"></label>
           <p id="settings-msg" class="msg" role="status" aria-live="polite"></p>
-          <button type="submit" class="btn btn-secondary">Save settings</button>
+          <button type="submit" class="btn btn-secondary">Save</button>
         </form>
+      </section>
+
+      <section class="panel">
+        <h2>Bets storage</h2>
+        <div id="b-connected" hidden>
+          <p>Bets are saved, encrypted, in the private repository <b id="b-where"></b>.</p>
+          <button type="button" class="btn btn-ghost btn-small" id="b-change">Change</button>
+        </div>
+        <form id="b-form" novalidate>
+          <p class="muted small">One-time setup. Create a <b>private</b> repository for bets (tick "Add a README file") and a token that can only reach that repository, with Contents: Read and write. Players' browsers use this token to save bets, so it must not be the admin token.</p>
+          <div class="grid2">
+            <label>GitHub username (owner)<input id="b-owner" type="text" autocomplete="off" autocapitalize="none" spellcheck="false"></label>
+            <label>Private repository<input id="b-repo" type="text" autocomplete="off" autocapitalize="none" spellcheck="false"></label>
+          </div>
+          <label>Branch<input id="b-branch" type="text" value="main" autocomplete="off" autocapitalize="none" spellcheck="false"></label>
+          <label>Bets token (only the bets repository, Contents: Read and write)<input id="b-token" type="password" autocomplete="off" autocapitalize="none" spellcheck="false"></label>
+          <div class="row">
+            <button type="submit" class="btn btn-primary" id="b-btn">Connect bets storage</button>
+            <button type="button" class="btn btn-ghost" id="b-cancel" hidden>Cancel</button>
+          </div>
+        </form>
+        <p id="b-msg" class="msg" role="status" aria-live="polite"></p>
       </section>
 
       <section class="panel">
@@ -160,17 +185,65 @@
     <aside id="slip" class="slip" aria-label="Bet slip">
       <div class="slip-head">
         <h2>Bet slip</h2>
-        <button id="slip-close" class="icon-btn" type="button" aria-label="Clear bet slip">×</button>
+        <button id="slip-close" class="icon-btn" type="button" aria-label="Close bet slip">×</button>
       </div>
-      <div id="slip-empty" class="slip-empty">Tap an odds button to add a selection.</div>
+      <div id="slip-empty" class="slip-empty">Tap a side of a line, or <b>Make your own bet</b> on a couple.</div>
       <div id="slip-body" hidden>
         <p id="slip-couple" class="slip-couple"></p>
+        <div class="seg" id="slip-type" role="group" aria-label="Bet type">
+          <button type="button" data-v="dur">How long</button>
+          <button type="button" data-v="marry">Marriage</button>
+        </div>
+        <div id="slip-dur">
+          <div class="seg" id="slip-side" role="group" aria-label="Side">
+            <button type="button" data-v="over">+ More than</button>
+            <button type="button" data-v="under">&minus; Less than</button>
+          </div>
+          <div class="grid2 tight">
+            <label>Number<input id="slip-n" type="number" inputmode="numeric" min="1" step="1" autocomplete="off"></label>
+            <label>Unit
+              <select id="slip-u">
+                <option value="w">weeks</option>
+                <option value="m">months</option>
+                <option value="y">years</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div id="slip-marry" hidden>
+          <div class="seg" id="slip-yn" role="group" aria-label="Side">
+            <button type="button" data-v="yes">Yes, they marry</button>
+            <button type="button" data-v="no">No</button>
+          </div>
+        </div>
+        <p id="slip-explain" class="slip-explain"></p>
         <div class="slip-pick"><span id="slip-bucket"></span><span id="slip-odds" class="slip-odds"></span></div>
-        <label class="slip-stake">Stake (points)<input id="slip-stake" type="number" inputmode="decimal" min="0" step="1" value="10"></label>
-        <p class="slip-return">Potential return <b id="slip-return">0.00</b></p>
-        <a id="slip-go" class="btn btn-primary btn-block" target="_blank" rel="noopener noreferrer">Place bet</a>
-        <p id="slip-nolink" class="muted small" hidden>No betting link set for this couple yet. Ask the admin.</p>
-        <p id="slip-source" class="muted small"></p>
+        <p id="slip-pool" class="muted small"></p>
+        <p id="slip-state" class="msg error" hidden></p>
+        <form id="slip-form" novalidate hidden>
+          <div id="slip-profile">
+            <p class="muted small">First bet on this device? Pick a name and a PIN (4 to 8 digits). Use the same ones on any device.</p>
+            <div class="grid2 tight">
+              <label>Your name<input id="slip-name" type="text" maxlength="24" autocomplete="nickname" spellcheck="false"></label>
+              <label>PIN<input id="slip-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off"></label>
+            </div>
+          </div>
+          <p id="slip-me" class="slip-me" hidden>Betting as <b id="slip-me-name"></b> · <span id="slip-me-bal"></span> · <button type="button" class="linklike" id="slip-switch">Not you?</button></p>
+          <p id="slip-mine" class="muted small" hidden></p>
+          <p id="slip-rule" class="msg warn" hidden></p>
+          <label class="slip-stake">Stake (points)<input id="slip-stake" type="number" inputmode="numeric" min="1" step="1" value="100"></label>
+          <div class="chips" id="slip-chips">
+            <button type="button" data-v="10">10</button>
+            <button type="button" data-v="50">50</button>
+            <button type="button" data-v="100">100</button>
+            <button type="button" data-v="500">500</button>
+            <button type="button" data-v="all">All in</button>
+          </div>
+          <p class="slip-return">If it wins now <b id="slip-return">0 pts</b></p>
+          <p id="slip-after" class="muted small"></p>
+          <button type="submit" id="slip-go" class="btn btn-primary btn-block">Place bet</button>
+          <p id="slip-msg" class="msg" role="status" aria-live="polite"></p>
+        </form>
       </div>
     </aside>
   </div>

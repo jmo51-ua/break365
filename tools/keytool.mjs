@@ -101,7 +101,7 @@ async function main() {
     process.exit(1);
   }
 
-  let data = { v: 1, settings: { defaultBetUrl: '', margin: 0 }, couples: [] };
+  let data = { v: 2, settings: { startPoints: 1000, bets: null }, couples: [] };
   let secrets = null; // GitHub connection, kept across a rotate when the admin password is given
   if (mode === 'init') {
     if ((await exists('keyring.json')) && !process.argv.includes('--force')) {
