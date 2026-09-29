@@ -1,0 +1,20 @@
+{
+  "v": 1,
+  "kdf": {
+    "name": "PBKDF2",
+    "hash": "SHA-256",
+    "iterations": 600000
+  },
+  "roles": {
+    "admin": {
+      "salt": "Myao6ply78QsIEeLJZOPLw==",
+      "iv": "39mzbEmpfN7C6Cf7",
+      "wrapped": "BfZRkqwgMF2TVkB38yu8ApOSgadnZF2tZjlOdEYDH1iONqUNFrCoDN568NsE+6LZ"
+    },
+    "user": {
+      "salt": "HhU3OV0LT9p4fnK/2mmIQw==",
+      "iv": "tSPUsryLYeV6x+j0",
+      "wrapped": "swoMFiSD+Jl7hdLudb49dU6ZchcSe/NPfMm+HlMyo31KmRTTstlz+UM1b7WMp0MG"
+    }
+  }
+}

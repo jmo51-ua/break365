@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://api.github.com https://api.manifold.markets; base-uri 'none'; form-action 'none'">
+<meta name="theme-color" content="#0f1115">
+<title>Break365</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230f1115'/%3E%3Cpath d='M32 54C12 40 6 29 9 19c3-10 16-12 23-3 7-9 20-7 23 3 3 10-3 21-23 35z' fill='%23ff3d68'/%3E%3Cpath d='M32 16l-5 10 8 6-6 9 3 9' fill='none' stroke='%230f1115' stroke-width='3' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- LOGIN -->
+<section id="login" class="login">
+  <div class="login-card">
+    <div class="brand brand-lg" aria-label="Break365"><span class="brand-break">break</span><span class="brand-num">365</span></div>
+    <p class="tagline">How long will it last?</p>
+    <form id="login-form" novalidate>
+      <label for="pw">Password</label>
+      <input id="pw" name="pw" type="password" autocomplete="current-password" autocapitalize="none" autocorrect="off" spellcheck="false" disabled>
+      <button type="submit" id="login-btn" class="btn btn-primary" disabled>Loading…</button>
+      <p id="login-msg" class="msg" role="status" aria-live="polite"></p>
+    </form>
+    <p class="fineprint">Private. The password is checked and the data is decrypted only inside your browser. Nothing is sent anywhere.</p>
+  </div>
+</section>
+
+<!-- APP -->
+<div id="main" hidden>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand" aria-label="Break365"><span class="brand-break">break</span><span class="brand-num">365</span></div>
+      <div class="topbar-right">
+        <span id="role-badge" class="badge"></span>
+        <button id="logout-btn" class="btn btn-ghost" type="button">Log out</button>
+      </div>
+    </div>
+    <nav class="tabs" aria-label="Sections">
+      <div class="tabs-inner">
+        <button class="tab is-active" type="button" data-view="live">Live</button>
+        <button class="tab" type="button" data-view="settled">Settled</button>
+        <button class="tab" type="button" data-view="all">All</button>
+        <button class="tab tab-admin" type="button" data-view="admin" hidden>Admin <span id="dirty-dot" class="dot" hidden></span></button>
+      </div>
+    </nav>
+  </header>
+
+  <div class="layout">
+    <main id="book" class="book">
+      <div class="book-head">
+        <h1 id="book-title">Live couples</h1>
+        <input id="search" class="search" type="search" placeholder="Search names" aria-label="Search couples" autocomplete="off">
+      </div>
+      <div class="rules">
+        <span><b>+Weeks</b> ends before 3 months</span>
+        <span><b>+Months</b> ends between 3 and 12 months</span>
+        <span><b>+Years</b> lasts 1 year or more</span>
+      </div>
+      <div id="couple-list" class="couple-list"></div>
+    </main>
+
+    <!-- ADMIN -->
+    <main id="admin" class="admin" hidden>
+      <div id="sync-bar" class="sync-bar" role="status" aria-live="polite">
+        <span id="sync-text"></span>
+        <button type="button" class="btn btn-secondary btn-small" id="sync-retry" hidden>Try again</button>
+      </div>
+      <section class="panel">
+        <h2 id="form-title">Add couple</h2>
+        <form id="couple-form" novalidate>
+          <input type="hidden" id="f-id">
+          <div class="grid2">
+            <label>Partner 1<input id="f-a" type="text" maxlength="60" required autocomplete="off"></label>
+            <label>Partner 2<input id="f-b" type="text" maxlength="60" required autocomplete="off"></label>
+          </div>
+          <div class="grid2">
+            <label>Together since<input id="f-since" type="date" required></label>
+            <label>Status
+              <select id="f-status">
+                <option value="active">Together (live)</option>
+                <option value="ended">Broken up (settle)</option>
+              </select>
+            </label>
+          </div>
+          <label id="f-ended-wrap" hidden>Broke up on<input id="f-ended" type="date"></label>
+          <fieldset class="odds-fields">
+            <legend>House odds (decimal, used when there is no live Manifold market)</legend>
+            <div class="grid3">
+              <label>+Weeks<input id="f-o-weeks" type="number" inputmode="decimal" min="1.01" max="1000" step="0.01" required></label>
+              <label>+Months<input id="f-o-months" type="number" inputmode="decimal" min="1.01" max="1000" step="0.01" required></label>
+              <label>+Years<input id="f-o-years" type="number" inputmode="decimal" min="1.01" max="1000" step="0.01" required></label>
+            </div>
+          </fieldset>
+          <label>Betting link (https, optional). A Manifold market link gives live % and odds<input id="f-url" type="url" inputmode="url" placeholder="https://manifold.markets/username/market-name" autocomplete="off"></label>
+          <p class="muted small hint">On Manifold, create a multiple-choice market with exactly three answers: Weeks, Months, Years (Semanas, Meses, Años also work).</p>
+          <button type="button" class="btn btn-secondary btn-small" id="f-check">Check Manifold market</button>
+          <label>Note (optional)<input id="f-note" type="text" maxlength="140" autocomplete="off"></label>
+          <p id="form-msg" class="msg" role="status" aria-live="polite"></p>
+          <div class="row">
+            <button type="submit" class="btn btn-primary" id="f-save">Add couple</button>
+            <button type="button" class="btn btn-ghost" id="f-cancel" hidden>Cancel edit</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel">
+        <h2>Couples</h2>
+        <div id="admin-list" class="admin-list"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Betting settings</h2>
+        <form id="settings-form" novalidate>
+          <label>Default betting link, used for every couple without its own link (https)<input id="s-url" type="url" inputmode="url" autocomplete="off" placeholder="https://manifold.markets/..."></label>
+          <label>House margin on live odds, % (0 = fair odds, 5 = bookmaker style)<input id="s-margin" type="number" inputmode="decimal" min="0" max="25" step="0.5" value="0"></label>
+          <p class="muted small">Live odds = (1 − margin) ÷ Manifold probability. Example: 40% with 0 margin gives 2.50.</p>
+          <p id="settings-msg" class="msg" role="status" aria-live="polite"></p>
+          <button type="submit" class="btn btn-secondary">Save settings</button>
+        </form>
+      </section>
+
+      <section class="panel">
+        <h2>GitHub connection</h2>
+        <div id="gh-connected" hidden>
+          <p>Connected to <b id="gh-where"></b>. Every change made by any admin is published automatically.</p>
+          <div class="row">
+            <button type="button" class="btn btn-ghost btn-small" id="gh-change">Change connection</button>
+            <button type="button" class="btn btn-danger" id="gh-disconnect">Disconnect</button>
+          </div>
+        </div>
+        <form id="gh-form" novalidate>
+          <p class="muted small">One-time setup by the site owner. After this, admins only need the admin password: changes publish on their own. The token is saved encrypted with the admin password; the player password cannot open it.</p>
+          <div class="grid2">
+            <label>GitHub username (owner)<input id="gh-owner" type="text" autocomplete="off" autocapitalize="none" spellcheck="false"></label>
+            <label>Repository<input id="gh-repo" type="text" autocomplete="off" autocapitalize="none" spellcheck="false"></label>
+          </div>
+          <div class="grid2">
+            <label>Branch<input id="gh-branch" type="text" value="main" autocomplete="off" autocapitalize="none" spellcheck="false"></label>
+            <label>Folder (empty if the site is at the root)<input id="gh-dir" type="text" autocomplete="off" autocapitalize="none" spellcheck="false"></label>
+          </div>
+          <label>GitHub token (fine-grained, only this repository, Contents: Read and write)<input id="gh-token" type="password" autocomplete="off" autocapitalize="none" spellcheck="false"></label>
+          <div class="row">
+            <button type="submit" class="btn btn-primary" id="gh-btn">Connect GitHub</button>
+            <button type="button" class="btn btn-ghost" id="gh-cancel" hidden>Cancel</button>
+          </div>
+        </form>
+        <p id="gh-msg" class="msg" role="status" aria-live="polite"></p>
+        <details class="manual">
+          <summary>Manual backup</summary>
+          <p class="muted small">Downloads the encrypted couples file. Only needed if GitHub is not connected: upload it to the repository to replace <code>couples.enc.json</code>.</p>
+          <button type="button" class="btn btn-secondary btn-small" id="dl-btn">Download couples.enc.json</button>
+        </details>
+      </section>
+    </main>
+
+    <!-- BET SLIP -->
+    <aside id="slip" class="slip" aria-label="Bet slip">
+      <div class="slip-head">
+        <h2>Bet slip</h2>
+        <button id="slip-close" class="icon-btn" type="button" aria-label="Clear bet slip">×</button>
+      </div>
+      <div id="slip-empty" class="slip-empty">Tap an odds button to add a selection.</div>
+      <div id="slip-body" hidden>
+        <p id="slip-couple" class="slip-couple"></p>
+        <div class="slip-pick"><span id="slip-bucket"></span><span id="slip-odds" class="slip-odds"></span></div>
+        <label class="slip-stake">Stake (points)<input id="slip-stake" type="number" inputmode="decimal" min="0" step="1" value="10"></label>
+        <p class="slip-return">Potential return <b id="slip-return">0.00</b></p>
+        <a id="slip-go" class="btn btn-primary btn-block" target="_blank" rel="noopener noreferrer">Place bet</a>
+        <p id="slip-nolink" class="muted small" hidden>No betting link set for this couple yet. Ask the admin.</p>
+        <p id="slip-source" class="muted small"></p>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
