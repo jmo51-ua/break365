@@ -58,9 +58,10 @@
       </div>
       <p id="bets-status" class="bets-status" role="status" aria-live="polite"></p>
       <div class="rules">
-        <span><b>+</b> still together after that time</span>
-        <span><b>&minus;</b> broken up by then</span>
-        <span>Odds = all points on a line ÷ points on your side</span>
+        <span><b>+</b> together for at least that long</span>
+        <span><b>&minus;</b> broken up in less than that</span>
+        <span><b>Married</b> they get married</span>
+        <span>Winners of a couple split the points of the wrong bets</span>
       </div>
       <div id="couple-list" class="couple-list"></div>
     </main>
@@ -89,20 +90,20 @@
             <label>Partner 1<input id="f-a" type="text" maxlength="60" required autocomplete="off"></label>
             <label>Partner 2<input id="f-b" type="text" maxlength="60" required autocomplete="off"></label>
           </div>
-          <div class="grid2">
-            <label>Together since<input id="f-since" type="date" required></label>
+          <label>Dating since<input id="f-since" type="date" required></label>
+          <fieldset id="f-outcome" class="outcome" hidden>
+            <legend>What happened (settles the bets)</legend>
             <label>Status
               <select id="f-status">
-                <option value="active">Together</option>
+                <option value="active">Still together</option>
                 <option value="ended">Broken up</option>
               </select>
             </label>
-          </div>
-          <label id="f-ended-wrap" hidden>Broke up on<input id="f-ended" type="date"></label>
-          <label class="check"><input id="f-married" type="checkbox"> They got married</label>
-          <label id="f-married-wrap" hidden>Wedding date<input id="f-married-on" type="date"></label>
-          <label>Note (optional)<input id="f-note" type="text" maxlength="140" autocomplete="off"></label>
-          <p class="muted small">No odds to set: players create the lines and the odds come from their bets. Lines are decided automatically from these dates.</p>
+            <label id="f-ended-wrap" hidden>Broke up on<input id="f-ended" type="date"></label>
+            <label class="check"><input id="f-married" type="checkbox"> They got married</label>
+            <label id="f-married-wrap" hidden>Wedding date<input id="f-married-on" type="date"></label>
+          </fieldset>
+          <p class="muted small">Players choose their own bets and the odds come from those bets. When a couple breaks up or marries, press Edit and record it here.</p>
           <p id="form-msg" class="msg" role="status" aria-live="polite"></p>
           <div class="row">
             <button type="submit" class="btn btn-primary" id="f-save">Add couple</button>
@@ -187,18 +188,15 @@
         <h2>Bet slip</h2>
         <button id="slip-close" class="icon-btn" type="button" aria-label="Close bet slip">×</button>
       </div>
-      <div id="slip-empty" class="slip-empty">Tap a side of a line, or <b>Make your own bet</b> on a couple.</div>
+      <div id="slip-empty" class="slip-empty">Tap a bet on a couple, or <b>Make your own bet</b>.</div>
       <div id="slip-body" hidden>
         <p id="slip-couple" class="slip-couple"></p>
-        <div class="seg" id="slip-type" role="group" aria-label="Bet type">
-          <button type="button" data-v="dur">How long</button>
-          <button type="button" data-v="marry">Marriage</button>
+        <div class="seg" id="slip-side" role="group" aria-label="Your bet">
+          <button type="button" data-v="over">+ Together</button>
+          <button type="button" data-v="under">&minus; Together</button>
+          <button type="button" data-v="yes">Married</button>
         </div>
         <div id="slip-dur">
-          <div class="seg" id="slip-side" role="group" aria-label="Side">
-            <button type="button" data-v="over">+ More than</button>
-            <button type="button" data-v="under">&minus; Less than</button>
-          </div>
           <div class="grid2 tight">
             <label>Number<input id="slip-n" type="number" inputmode="numeric" min="1" step="1" autocomplete="off"></label>
             <label>Unit
@@ -208,12 +206,6 @@
                 <option value="y">years</option>
               </select>
             </label>
-          </div>
-        </div>
-        <div id="slip-marry" hidden>
-          <div class="seg" id="slip-yn" role="group" aria-label="Side">
-            <button type="button" data-v="yes">Yes, they marry</button>
-            <button type="button" data-v="no">No</button>
           </div>
         </div>
         <p id="slip-explain" class="slip-explain"></p>
@@ -239,8 +231,8 @@
             <button type="button" data-v="500">500</button>
             <button type="button" data-v="all">All in</button>
           </div>
-          <p class="slip-return">If it wins now <b id="slip-return">0 pts</b></p>
-          <p id="slip-after" class="muted small"></p>
+          <p class="slip-return">If you win <b id="slip-return">0 pts</b></p>
+          <p class="muted small">You get your points back plus a share of the wrong bets. It changes as others bet.</p>
           <button type="submit" id="slip-go" class="btn btn-primary btn-block">Place bet</button>
           <p id="slip-msg" class="msg" role="status" aria-live="polite"></p>
         </form>

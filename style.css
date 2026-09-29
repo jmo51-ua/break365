@@ -130,7 +130,7 @@ legend { font-size: 13px; color: var(--muted); padding: 0 4px; }
 .line-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
 .line-title { font-weight: 700; font-size: 14px; }
 .line-sub { font-size: 12px; color: var(--muted); }
-.line-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border-radius: var(--radius); overflow: hidden; }
+.line-sides { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border-radius: var(--radius); overflow: hidden; }
 .more { margin: 0; }
 .make-bet { min-height: 40px; font-size: 14px; }
 .settled-lines summary, .bets summary { cursor: pointer; color: var(--muted); font-size: 13px; }
@@ -168,6 +168,32 @@ legend { font-size: 13px; color: var(--muted); padding: 0 4px; }
 .odds-btn.lost .m-odds { color: var(--muted); font-size: 13px; font-weight: 600; text-decoration: line-through; }
 .empty { background: var(--panel); border: 1px dashed var(--line); border-radius: 10px; padding: 28px 16px; text-align: center; color: var(--muted); }
 
+.preds { border-top: 1px solid var(--line); padding: 10px 12px 12px; display: grid; gap: 6px; }
+.pred-row { position: relative; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 4px 12px;
+  width: 100%; text-align: left; background: var(--odds); border: 0; border-radius: var(--radius); color: var(--text); padding: 10px 12px 12px; cursor: pointer; font-family: var(--font); }
+.pred-row:hover:not(:disabled) { background: var(--odds-hover); }
+.pred-row:disabled { cursor: default; }
+.pred-main { display: flex; flex-direction: column; min-width: 0; }
+.pred-label { font-weight: 800; font-size: 15px; }
+.pred-sub { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.pred-pts { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.pred-odds { font-weight: 800; font-size: 15px; white-space: nowrap; text-align: right; min-width: 72px; }
+.pred-row .meter { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--accent); opacity: .8; width: 0; }
+.pred-row[aria-pressed="true"], .pred-row[aria-pressed="true"]:hover:not(:disabled) { background: var(--accent); color: var(--accent-ink); }
+.pred-row[aria-pressed="true"] .pred-sub, .pred-row[aria-pressed="true"] .pred-pts { color: var(--accent-ink); opacity: .85; }
+.pred-row[aria-pressed="true"] .meter { background: var(--accent-ink); }
+.pred-row.closed .pred-odds { color: var(--muted); font-weight: 600; }
+.pred-row.won { background: rgba(61, 220, 151, .14); }
+.pred-row.won .pred-odds { color: var(--win); }
+.pred-row.lost .pred-odds { color: var(--muted); text-decoration: line-through; font-weight: 600; }
+.settle-note { margin: 0 0 2px; font-size: 13px; color: var(--text); }
+.outcome { margin-top: 4px; }
+@media (max-width: 420px) {
+  .pred-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .pred-pts { grid-column: 1; grid-row: 2; }
+  .pred-odds { grid-column: 2; grid-row: 1 / 3; }
+}
+
 /* Bet slip */
 .slip { position: sticky; top: 112px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
 .slip-head { display: flex; justify-content: space-between; align-items: center; }
@@ -184,7 +210,7 @@ legend { font-size: 13px; color: var(--muted); padding: 0 4px; }
 .slip-me { font-size: 14px; margin: 12px 0 4px; }
 .linklike { background: none; border: 0; padding: 0; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; }
 .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius); padding: 3px; margin: 10px 0; }
-.seg button { background: none; border: 0; color: var(--muted); font: 600 14px var(--font); min-height: 36px; border-radius: 6px; cursor: pointer; }
+.seg button { background: none; border: 0; color: var(--muted); font: 600 13px var(--font); padding: 0 4px; min-height: 36px; border-radius: 6px; cursor: pointer; }
 .seg button[aria-pressed="true"] { background: var(--panel-2); color: var(--text); box-shadow: inset 0 0 0 1px var(--line); }
 .chips { display: flex; gap: 6px; flex-wrap: wrap; margin: -4px 0 12px; }
 .chips button { background: var(--panel-2); border: 1px solid var(--line); color: var(--text); font: 600 13px var(--font); border-radius: 999px; padding: 6px 12px; cursor: pointer; }

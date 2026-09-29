@@ -6,12 +6,12 @@
  *  - The admin's GitHub connection (site repository) is encrypted with the admin password's key only.
  *  - Bets live in bets.enc.json in a separate PRIVATE repository, encrypted with a random bets key that is
  *    itself stored inside the encrypted couples data.
- * Betting model (pool based, like Twitch predictions):
- *  - A "line" is a duration (N weeks, months or years from the day they got together) or the marriage question.
- *  - Each line has two sides: + (still together after the date) and - (break up on or before it), or Yes / No.
- *  - Odds of a side = all points on the line / points on that side. Winners split the whole line pool.
- *  - Lines resolve on their own from the dates the admin enters. Bets placed on or after the day that
- *    decides a line are refunded.
+ * Betting model (one pot per couple, like Twitch predictions):
+ *  - A bet is +N (still together after N weeks/months/years), -N (broken up within N) or Married.
+ *  - All bets on a couple share one pot. When the couple is settled (break-up or wedding), everyone
+ *    who got it right gets their points back plus a share of the wrong bets, in proportion to stake.
+ *  - A wedding settles the couple: Married and every + bet win, every - bet loses.
+ *  - Bets placed on or after the settling day, or after their own date, are refunded.
  */
 (function () {
   'use strict';
@@ -162,7 +162,6 @@
     return {
       id: typeof c.id === 'string' && c.id ? c.id.slice(0, 64) : newId(),
       a: a, b: b, since: c.since,
-      note: cleanText(c.note, 140),
       status: ended ? 'ended' : 'active',
       endedOn: ended ? c.endedOn : '',
       marriedOn: married ? c.marriedOn : ''
@@ -187,59 +186,98 @@
     return out;
   }
 
-  /* ---------- lines (markets) ---------- */
+  /* ---------- predictions ---------- */
+  // A bet is one prediction about a couple:
+  //   over  +N  they are still together N weeks, months or years after they got together
+  //   under -N  they break up within N
+  //   wed       they get married
+  // All bets on a couple share ONE pot. When the couple is settled (break-up or wedding),
+  // everyone who got it right splits the points of everyone who got it wrong.
   function parseMk(mk) {
-    if (mk === 'marry') return { type: 'marry' };
+    if (mk === 'wed') return { type: 'wed' };
     var m = /^([1-9]\d{0,2})([wmy])$/.exec(typeof mk === 'string' ? mk : '');
     if (!m) return null;
     var n = +m[1];
     return n <= UNITS[m[2]].max ? { type: 'dur', n: n, u: m[2] } : null;
   }
-  function sidesOf(mk) { return mk === 'marry' ? ['yes', 'no'] : ['over', 'under']; }
-  function validSide(mk, s) { return sidesOf(mk).indexOf(s) !== -1; }
+  function validSide(mk, s) { return mk === 'wed' ? s === 'yes' : (s === 'over' || s === 'under'); }
+  function predKey(mk, s) { return mk === 'wed' ? 'wed' : s + ':' + mk; }
   function mkLabel(mk) {
     var p = parseMk(mk);
     if (!p) return '';
-    if (p.type === 'marry') return 'Marriage';
+    if (p.type === 'wed') return 'Married';
     return p.n + ' ' + (p.n === 1 ? UNITS[p.u].one : UNITS[p.u].many);
   }
   function betLabel(mk, s) {
-    if (mk === 'marry') return s === 'yes' ? 'Marry: Yes' : 'Marry: No';
+    if (mk === 'wed') return 'Married';
     return (s === 'over' ? '+' : MINUS) + mkLabel(mk);
   }
-  function sideShort(mk, s) {
-    if (mk === 'marry') return s === 'yes' ? 'Yes' : 'No';
-    return s === 'over' ? '+ More' : MINUS + ' Less';
-  }
-  // The date that decides a duration line (UTC dates, same result in every browser).
+  // The date a +N / -N prediction is about (UTC dates, same result in every browser).
   function threshold(c, mk) {
     var p = parseMk(mk);
     if (p.u === 'w') return isoAddDays(c.since, 7 * p.n);
     if (p.u === 'm') return isoAddMonths(c.since, p.n);
     return isoAddMonths(c.since, 12 * p.n);
   }
-  // Winning side, or '' while the line is still open.
-  function marketResult(c, mk, day) {
-    if (mk === 'marry') {
-      if (c.marriedOn) return 'yes';
-      if (c.status === 'ended') return 'no';
-      return '';
-    }
+  // A couple is open for betting while together and not married.
+  function isOpenCouple(c) { return c.status === 'active' && !c.marriedOn; }
+  // The day that settled the couple: the wedding if they married, otherwise the break-up.
+  function decidedOn(c) { return c.marriedOn || (c.status === 'ended' ? c.endedOn : ''); }
+  // Did this prediction come true? (settled couples only)
+  function predWins(c, mk, s) {
+    if (c.marriedOn) return mk === 'wed' || s === 'over'; // a wedding settles it: Married and every + win
+    if (mk === 'wed') return false;
     var th = threshold(c, mk);
-    if (c.status === 'ended') return c.endedOn > th ? 'over' : 'under';
-    if (day > th) return 'over';
-    return '';
+    return s === 'over' ? c.endedOn > th : c.endedOn <= th;
   }
-  // A bet counts only if it was placed before the day that decided its line.
+  // Open couples: 'true' or 'false' once the date of a +N / -N has passed, '' otherwise.
+  function predKnown(c, mk, s, day) {
+    if (mk === 'wed' || day <= threshold(c, mk)) return '';
+    return s === 'over' ? 'true' : 'false';
+  }
+  // A bet counts only if it was placed before the couple was settled and before its own date.
   function betValid(c, mk, t) {
-    var d = utcDay(t);
-    if (c.status === 'ended' && d >= c.endedOn) return false;
-    if (mk === 'marry') return !(c.marriedOn && d >= c.marriedOn);
-    return d < threshold(c, mk);
+    var d = utcDay(t), end = decidedOn(c);
+    if (end && d >= end) return false;
+    return mk === 'wed' || d < threshold(c, mk);
   }
-  function canBetNow(c, mk) {
-    var now = Date.now();
-    return c.status === 'active' && betValid(c, mk, now) && !marketResult(c, mk, utcDay(now));
+  function canBetNow(c, mk) { return isOpenCouple(c) && betValid(c, mk, Date.now()); }
+
+  // Possible endings of an open couple, to show the best payout a prediction can get.
+  function scenarios(c, cs, day, extra) {
+    var ths = [];
+    function add(t) { if (t && t >= day && ths.indexOf(t) === -1) ths.push(t); }
+    if (cs) Object.keys(cs.preds).forEach(function (pk) { var pr = cs.preds[pk]; if (pr.m !== 'wed') add(threshold(c, pr.m)); });
+    add(extra);
+    ths.sort();
+    var list = [{ wed: true }];
+    ths.forEach(function (t) { list.push({ end: t }); });
+    list.push({ end: '9999-12-31' });
+    return list;
+  }
+  function winsIn(c, mk, s, sc) {
+    if (sc.wed) return mk === 'wed' || s === 'over';
+    if (mk === 'wed') return false;
+    var th = threshold(c, mk);
+    return s === 'over' ? sc.end > th : sc.end <= th;
+  }
+  // Best total return per point staked, if this prediction wins. 0 when it cannot be computed yet.
+  function upTo(c, cs, mk, s, stake) {
+    var day = utcDay(Date.now());
+    var pot = (cs ? cs.total : 0) + stake, best = 0;
+    scenarios(c, cs, day, mk === 'wed' ? '' : threshold(c, mk)).forEach(function (sc) {
+      if (!winsIn(c, mk, s, sc)) return;
+      var w = stake;
+      if (cs) Object.keys(cs.preds).forEach(function (pk) { var pr = cs.preds[pk]; if (winsIn(c, pr.m, pr.s, sc)) w += pr.total; });
+      if (w > 0) best = Math.max(best, pot / w);
+    });
+    return best;
+  }
+  // Holding +N and -N for the same N at once is not allowed.
+  function hasOpposite(cs, mk, s, key) {
+    if (!cs || mk === 'wed') return false;
+    var pr = cs.preds[predKey(mk, s === 'over' ? 'under' : 'over')];
+    return !!(pr && pr.list.some(function (r) { return r.bet.k === key; }));
   }
 
   /* ---------- local dates (display only) ---------- */
@@ -304,15 +342,9 @@
     return out;
   }
 
-  function newMarket(c, mk, day) {
-    var m = { mk: mk, pools: {}, bettors: {}, total: 0, list: [], winner: marketResult(c, mk, day), ratio: 0, refundedAll: false };
-    sidesOf(mk).forEach(function (s) { m.pools[s] = 0; m.bettors[s] = 0; });
-    return m;
-  }
-
   // Pure: same data and bets give the same balances in every browser.
   function computeStats(data, bets) {
-    var start = data.settings.startPoints, day = utcDay(Date.now());
+    var start = data.settings.startPoints;
     var S = { players: Object.create(null), couples: Object.create(null), bets: Object.create(null) };
     Object.keys(bets.players).forEach(function (k) {
       S.players[k] = { key: k, name: bets.players[k].name, balance: start, locked: 0, net: 0, won: 0, lost: 0, count: 0 };
@@ -320,57 +352,56 @@
     var cmap = Object.create(null);
     data.couples.forEach(function (c) {
       cmap[c.id] = c;
-      S.couples[c.id] = { markets: Object.create(null), total: 0, people: 0, list: [], seen: Object.create(null) };
+      S.couples[c.id] = { preds: Object.create(null), total: 0, people: 0, list: [], seen: Object.create(null),
+        winners: 0, losers: 0, ratio: 0, refundedAll: false, decided: !isOpenCouple(c) };
     });
-    var seenSide = Object.create(null);
     bets.bets.forEach(function (b) {
       var c = cmap[b.c], pl = S.players[b.k];
       if (!c || !pl) return; // bets on deleted couples do not count (points come back)
       var cs = S.couples[b.c];
-      var m = cs.markets[b.m] || (cs.markets[b.m] = newMarket(c, b.m, day));
       var r = { bet: b, status: 'open', net: 0, payout: 0 };
       S.bets[b.id] = r;
       cs.list.push(r);
-      m.list.push(r);
       pl.count++;
       if (!betValid(c, b.m, b.t)) { r.status = 'refunded'; return; }
-      m.pools[b.s] += b.p;
-      m.total += b.p;
+      var pk = predKey(b.m, b.s);
+      var pr = cs.preds[pk] || (cs.preds[pk] = { pk: pk, m: b.m, s: b.s, total: 0, people: 0, seen: Object.create(null), list: [] });
+      pr.total += b.p;
+      pr.list.push(r);
+      if (!pr.seen[b.k]) { pr.seen[b.k] = 1; pr.people++; }
       cs.total += b.p;
-      var sk = b.c + '|' + b.m + '|' + b.s + '|' + b.k;
-      if (!seenSide[sk]) { seenSide[sk] = 1; m.bettors[b.s]++; }
       if (!cs.seen[b.k]) { cs.seen[b.k] = 1; cs.people++; }
     });
-    Object.keys(S.couples).forEach(function (id) {
-      var cs = S.couples[id];
-      Object.keys(cs.markets).forEach(function (mk) {
-        var m = cs.markets[mk];
-        var valid = m.list.filter(function (r) { return r.status !== 'refunded'; });
-        if (!m.winner) {
-          valid.forEach(function (r) { S.players[r.bet.k].locked += r.bet.p; });
-          return;
+    data.couples.forEach(function (c) {
+      var cs = S.couples[c.id];
+      var valid = cs.list.filter(function (r) { return r.status !== 'refunded'; });
+      if (!cs.decided) {
+        valid.forEach(function (r) { S.players[r.bet.k].locked += r.bet.p; });
+        return;
+      }
+      valid.forEach(function (r) {
+        r.win = predWins(c, r.bet.m, r.bet.s);
+        if (r.win) cs.winners += r.bet.p; else cs.losers += r.bet.p;
+      });
+      if (!cs.winners) {
+        cs.refundedAll = valid.length > 0;
+        valid.forEach(function (r) { r.status = 'refunded'; });
+        return;
+      }
+      cs.ratio = (cs.winners + cs.losers) / cs.winners;
+      valid.forEach(function (r) {
+        var pl = S.players[r.bet.k];
+        if (r.win) {
+          r.payout = r.bet.p + Math.floor(r.bet.p * cs.losers / cs.winners);
+          r.net = r.payout - r.bet.p;
+          r.status = 'won';
+          pl.won++;
+        } else {
+          r.net = -r.bet.p;
+          r.status = 'lost';
+          pl.lost++;
         }
-        var w = m.winner, pw = m.pools[w];
-        if (!pw) {
-          m.refundedAll = valid.length > 0;
-          valid.forEach(function (r) { r.status = 'refunded'; });
-          return;
-        }
-        m.ratio = m.total / pw;
-        valid.forEach(function (r) {
-          var pl = S.players[r.bet.k];
-          if (r.bet.s === w) {
-            r.payout = Math.floor(r.bet.p * m.total / pw);
-            r.net = r.payout - r.bet.p;
-            r.status = 'won';
-            pl.won++;
-          } else {
-            r.net = -r.bet.p;
-            r.status = 'lost';
-            pl.lost++;
-          }
-          pl.net += r.net;
-        });
+        pl.net += r.net;
       });
     });
     Object.keys(S.players).forEach(function (k) {
@@ -378,15 +409,6 @@
       p.balance = start + p.net - p.locked;
     });
     return S;
-  }
-  function marketView(cs, c, mk) {
-    return (cs && cs.markets[mk]) || newMarket(c, mk, utcDay(Date.now()));
-  }
-  // Which side of this line the player already backed (valid bets only), or ''.
-  function sideOfPlayer(cs, mk, key) {
-    if (!cs || !cs.markets[mk]) return '';
-    var r = cs.markets[mk].list.filter(function (x) { return x.bet.k === key && x.status !== 'refunded'; })[0];
-    return r ? r.bet.s : '';
   }
 
   /* ---------- DOM helpers ---------- */
@@ -606,19 +628,20 @@
     $('book-title').textContent = titles[state.view];
     var q = state.query.toLowerCase();
     var list = state.data.couples.filter(function (c) {
-      if (state.view === 'live' && c.status !== 'active') return false;
-      if (state.view === 'settled' && c.status !== 'ended') return false;
+      if (state.view === 'live' && !isOpenCouple(c)) return false;
+      if (state.view === 'settled' && isOpenCouple(c)) return false;
       return !q || coupleName(c).toLowerCase().indexOf(q) !== -1;
     }).sort(function (x, y) {
-      if (x.status !== y.status) return x.status === 'active' ? -1 : 1;
-      var kx = x.status === 'ended' ? x.endedOn : x.since, ky = y.status === 'ended' ? y.endedOn : y.since;
+      var ox = isOpenCouple(x), oy = isOpenCouple(y);
+      if (ox !== oy) return ox ? -1 : 1;
+      var kx = ox ? x.since : (x.endedOn || x.marriedOn), ky = oy ? y.since : (y.endedOn || y.marriedOn);
       return kx < ky ? 1 : kx > ky ? -1 : 0;
     });
     var box = $('couple-list');
     box.textContent = '';
     if (!list.length) {
       var msg = q ? 'No couples match your search.'
-        : state.view === 'settled' ? 'Nobody has broken up yet.'
+        : state.view === 'settled' ? 'Nobody has broken up or married yet.'
         : state.role === 'admin' ? 'No couples yet. Add one in the Admin tab.' : 'No couples on the board yet.';
       box.appendChild(el('div', { class: 'empty', text: msg }));
       return;
@@ -627,112 +650,99 @@
   }
 
   function renderCard(c) {
-    var live = c.status === 'active';
+    var live = isOpenCouple(c);
     var since = parseDate(c.since);
     var cs = state.stats ? state.stats.couples[c.id] : null;
-    var metaText = live
-      ? 'Together since ' + fmtDate(c.since) + ' · ' + fmtDuration(since, today())
-      : 'Lasted ' + fmtDuration(since, parseDate(c.endedOn)) + ' · ' + fmtDate(c.since) + ' to ' + fmtDate(c.endedOn);
+    var metaText = c.status === 'ended'
+      ? 'Lasted ' + fmtDuration(since, parseDate(c.endedOn)) + ' · ' + fmtDate(c.since) + ' to ' + fmtDate(c.endedOn)
+      : 'Together since ' + fmtDate(c.since) + ' · ' + fmtDuration(since, today());
+    if (c.marriedOn) metaText += ' · married on ' + fmtDate(c.marriedOn);
     var badges = el('div', { class: 'badges' }, [
       c.marriedOn ? el('span', { class: 'status married', text: 'Married' }) : null,
       el('span', { class: 'status ' + (live ? 'live' : 'settled'), text: live ? 'Live' : 'Settled' })
     ]);
-    var poolText = cs && cs.total ? fmtPts(cs.total) + ' bet · ' + cs.people + (cs.people === 1 ? ' person' : ' people') : 'No bets yet';
+    var poolText = cs && cs.total ? 'Pot ' + fmtPts(cs.total) + ' · ' + cs.people + (cs.people === 1 ? ' person' : ' people') : 'No bets yet';
     var head = el('div', { class: 'card-head' }, [
       el('div', null, [
         el('div', { class: 'names' }, [c.a, el('span', { class: 'amp', text: '♥' }), c.b]),
         el('div', { class: 'meta', text: metaText }),
-        c.note ? el('div', { class: 'note', text: c.note }) : null,
         el('div', { class: 'pool', text: poolText })
       ]),
       badges
     ]);
 
-    var lines = [], mks = cs ? Object.keys(cs.markets).filter(function (mk) { return mk !== 'marry'; }) : [];
-    var open = [], done = [];
-    mks.forEach(function (mk) { (cs.markets[mk].winner ? done : open).push(mk); });
-    open.sort(function (x, y) {
-      var d = cs.markets[y].total - cs.markets[x].total;
-      return d || (threshold(c, x) < threshold(c, y) ? -1 : 1);
-    });
-    done.sort(function (x, y) { return threshold(c, x) < threshold(c, y) ? -1 : 1; });
-    var shownOpen = open.slice(0, MAX_OPEN_LINES);
-    // Keep a selected line visible even when it is not in the top list.
-    var sel = state.selection;
-    if (sel && sel.id === c.id) {
-      var smk = slipMk(sel);
-      if (smk && smk !== 'marry' && open.indexOf(smk) >= MAX_OPEN_LINES) shownOpen.push(smk);
+    var preds = cs ? Object.keys(cs.preds).map(function (k) { return cs.preds[k]; }) : [];
+    var rows = [];
+    if (live) {
+      var dur = preds.filter(function (pr) { return pr.m !== 'wed'; }).sort(function (x, y) {
+        return y.total - x.total || (threshold(c, x.m) < threshold(c, y.m) ? -1 : 1);
+      });
+      var shown = dur.slice(0, MAX_OPEN_LINES);
+      var sel = state.selection;
+      if (sel && sel.id === c.id) {
+        var smk = slipMk(sel);
+        var sp = smk && smk !== 'wed' ? cs && cs.preds[predKey(smk, sel.side)] : null;
+        if (sp && shown.indexOf(sp) === -1) shown.push(sp);
+      }
+      shown.forEach(function (pr) { rows.push(predRow(c, cs, pr.m, pr.s, true)); });
+      if (dur.length > shown.length) {
+        rows.push(el('p', { class: 'muted small more', text: (dur.length - shown.length) + ' more bets. Use Make your own bet to pick any time.' }));
+      }
+      rows.push(predRow(c, cs, 'wed', 'yes', true));
+      rows.push(el('button', {
+        type: 'button', class: 'btn btn-secondary btn-block make-bet', text: '+ Make your own bet',
+        onclick: function () { select({ id: c.id, side: 'over', n: '', u: 'm' }, true); }
+      }));
+    } else if (!preds.length) {
+      rows.push(el('p', { class: 'muted small more', text: 'Nobody bet on this couple.' }));
+    } else {
+      rows.push(el('p', { class: 'settle-note', text: cs.refundedAll
+        ? 'Nobody got it right, so every bet was refunded.'
+        : 'Winners split ' + fmtPts(cs.losers) + ' from the wrong bets (×' + fmtOdds(cs.ratio) + ' on every point).' }));
+      preds.sort(function (x, y) {
+        var wx = predWins(c, x.m, x.s), wy = predWins(c, y.m, y.s);
+        return wx !== wy ? (wx ? -1 : 1) : y.total - x.total;
+      }).forEach(function (pr) { rows.push(predRow(c, cs, pr.m, pr.s, false)); });
     }
-    shownOpen.forEach(function (mk) { lines.push(renderLine(c, cs, mk, live)); });
-    if (open.length > shownOpen.length) {
-      lines.push(el('p', { class: 'muted small more', text: (open.length - shownOpen.length) + ' more lines. Use Make your own bet to pick any time.' }));
-    }
-    if (!open.length && live) lines.push(el('p', { class: 'muted small more', text: 'No time bets yet. Make the first one.' }));
-    lines.push(renderLine(c, cs, 'marry', live));
-    if (done.length) {
-      var det = el('details', { class: 'settled-lines', open: state.openSettled[c.id] ? true : null }, [
-        el('summary', { text: 'Decided lines (' + done.length + ')' }),
-        el('div', null, done.map(function (mk) { return renderLine(c, cs, mk, live); }))
-      ]);
-      det.addEventListener('toggle', function () { if (det.open) state.openSettled[c.id] = 1; else delete state.openSettled[c.id]; });
-      if (!live) lines = done.map(function (mk) { return renderLine(c, cs, mk, live); });
-      else lines.push(det);
-    }
+    return el('article', { class: 'card' }, [head, el('div', { class: 'preds' }, rows), renderBetsList(c, cs)]);
+  }
+
+  function predRow(c, cs, mk, s, live) {
+    var pr = cs && cs.preds[predKey(mk, s)];
+    var total = pr ? pr.total : 0, pot = cs ? cs.total : 0, pct = pot ? total / pot : 0;
+    var sub = mk === 'wed' ? 'they get married' : (s === 'over' ? 'still together on ' : 'broken up by ') + fmtDate(threshold(c, mk));
+    var cls = 'pred-row', value, open = false;
     if (!live) {
-      // settled couples: only show lines people actually bet on
-      if (!done.length) lines = [];
-      var mm = cs && cs.markets.marry;
-      if (mm && mm.list.length) lines.push(renderLine(c, cs, 'marry', live));
-      if (!lines.length) lines.push(el('p', { class: 'muted small more', text: 'Nobody bet on this couple.' }));
+      if (cs.refundedAll) { value = 'Refunded'; cls += ' closed'; }
+      else if (predWins(c, mk, s)) { value = 'Won ×' + fmtOdds(cs.ratio); cls += ' won'; }
+      else { value = 'Lost'; cls += ' lost'; }
+    } else {
+      var known = predKnown(c, mk, s, utcDay(Date.now()));
+      open = canBetNow(c, mk);
+      if (known === 'false') { value = 'Lost'; cls += ' lost'; }
+      else {
+        var u = upTo(c, cs, mk, s, 0);
+        value = u ? 'up to ×' + fmtOdds(u) : 'New';
+        if (known === 'true') sub += ' · already true';
+      }
+      if (!open) cls += ' closed';
     }
-    var foot = live ? el('button', {
-      type: 'button', class: 'btn btn-secondary btn-block make-bet',
-      text: '+ Make your own bet',
-      onclick: function () { select({ id: c.id, type: 'dur', side: 'over', n: '', u: 'm' }, true); }
-    }) : null;
-    var body = el('div', { class: 'lines' }, lines.concat([foot]));
-    return el('article', { class: 'card' }, [head, body, renderBetsList(c, cs)]);
-  }
-
-  function renderLine(c, cs, mk, live) {
-    var m = marketView(cs, c, mk);
-    var open = live && canBetNow(c, mk);
-    var title = mk === 'marry' ? 'Will they get married?' : mkLabel(mk);
-    var sub;
-    if (mk === 'marry') sub = c.marriedOn ? 'Married on ' + fmtDate(c.marriedOn) : (m.total ? fmtPts(m.total) + ' on this line' : '');
-    else sub = 'Line: ' + fmtDate(threshold(c, mk)) + (m.total ? ' · ' + fmtPts(m.total) : '');
-    return el('div', { class: 'line' }, [
-      el('div', { class: 'line-head' }, [el('span', { class: 'line-title', text: title }), el('span', { class: 'line-sub', text: sub })]),
-      el('div', { class: 'line-sides' }, sidesOf(mk).map(function (s) { return sideBtn(c, m, mk, s, open); }))
-    ]);
-  }
-
-  function sideBtn(c, m, mk, s, open) {
-    var pool = m.pools[s], total = m.total, pct = total ? pool / total : 0;
-    var cls = 'odds-btn', value;
-    var sub = total ? fmtPct(pct) + ' · ' + fmtPts(pool) : '0 pts';
-    if (m.winner) {
-      if (m.refundedAll) { cls += ' closed'; value = 'Refunded'; }
-      else if (s === m.winner) { cls += ' won'; value = m.pools[s] ? 'Won ×' + fmtOdds(m.ratio) : 'Won'; }
-      else { cls += ' lost'; value = 'Lost'; }
-    } else if (!open) { cls += ' closed'; value = 'Closed'; }
-    else value = pool ? fmtOdds(total / pool) : 'New';
     var sel = state.selection;
-    var selected = !!(sel && sel.id === c.id && slipMk(sel) === mk && sel.side === s);
+    var selected = !!(sel && sel.id === c.id && slipMk(sel) === mk && (mk === 'wed' || sel.side === s));
     var meter = el('span', { class: 'meter' });
     meter.style.width = (pct * 100).toFixed(1) + '%';
     var p = parseMk(mk);
     return el('button', {
       type: 'button', class: cls, disabled: !open,
       'aria-pressed': open ? String(selected) : null,
-      'aria-label': coupleName(c) + ', ' + betLabel(mk, s) + ', ' + (open ? (pool ? 'odds ' + value : 'no bets yet') : value) + ', ' + sub,
+      'aria-label': coupleName(c) + ', ' + betLabel(mk, s) + ', ' + sub + ', ' + value + ', ' + fmtPts(total),
       onclick: open ? function () {
-        select(p.type === 'marry' ? { id: c.id, type: 'marry', side: s } : { id: c.id, type: 'dur', side: s, n: String(p.n), u: p.u }, true);
+        select(mk === 'wed' ? { id: c.id, side: 'yes', n: '', u: 'm' } : { id: c.id, side: s, n: String(p.n), u: p.u }, true);
       } : null
     }, [
-      el('span', { class: 'm-label', text: sideShort(mk, s) }),
-      el('span', { class: 'm-odds', text: value }),
-      el('span', { class: 'm-pct', text: sub }),
+      el('span', { class: 'pred-main' }, [el('span', { class: 'pred-label', text: betLabel(mk, s) }), el('span', { class: 'pred-sub', text: sub })]),
+      el('span', { class: 'pred-pts', text: fmtPts(total) + (pot ? ' · ' + fmtPct(pct) : '') }),
+      el('span', { class: 'pred-odds', text: value }),
       meter
     ]);
   }
@@ -792,7 +802,7 @@
   /* ---------- bet slip ---------- */
   function slipMk(sel) {
     if (!sel) return '';
-    if (sel.type === 'marry') return 'marry';
+    if (sel.side === 'yes') return 'wed';
     var n = Number(sel.n);
     if (!Number.isInteger(n) || n < 1 || !UNITS[sel.u] || n > UNITS[sel.u].max) return '';
     return n + sel.u;
@@ -800,8 +810,8 @@
 
   function select(sel, fromCard) {
     var s = state.selection;
-    if (fromCard && s && sel.type !== undefined && s.id === sel.id && slipMk(s) === slipMk(sel) && s.side === sel.side && slipMk(sel)) {
-      state.selection = null; // tapping the selected button again clears it
+    if (fromCard && s && slipMk(sel) && s.id === sel.id && slipMk(s) === slipMk(sel) && s.side === sel.side) {
+      state.selection = null; // tapping the selected option again clears it
     } else {
       state.selection = sel;
     }
@@ -809,18 +819,19 @@
     syncSlipInputs();
     if (isBookView()) renderBook();
     renderSlip();
-    if (state.selection && !state.selection.n && state.selection.type === 'dur') {
+    if (state.selection && state.selection.side !== 'yes' && !state.selection.n) {
       setTimeout(function () { try { $('slip-n').focus(); } catch (e) { /* ignore */ } }, 0);
     }
   }
   function syncSlipInputs() {
     var s = state.selection;
     if (!s) return;
-    if (s.type === 'dur') { $('slip-n').value = s.n || ''; $('slip-u').value = s.u || 'm'; }
+    $('slip-n').value = s.n || '';
+    $('slip-u').value = s.u || 'm';
   }
   function readSlipInputs() {
     var s = state.selection;
-    if (!s || s.type !== 'dur') return;
+    if (!s) return;
     s.n = $('slip-n').value.trim();
     s.u = $('slip-u').value;
   }
@@ -832,17 +843,15 @@
 
   function renderSlip() {
     var sel = state.selection, c = sel && state.data && findCouple(sel.id);
-    if (sel && (!c || c.status !== 'active')) { state.selection = sel = c = null; }
+    if (sel && (!c || !isOpenCouple(c))) { state.selection = sel = c = null; }
     document.body.classList.toggle('has-slip', !!sel && isBookView());
     $('slip-empty').hidden = !!sel;
     $('slip-body').hidden = !sel;
     if (!sel) return;
 
     $('slip-couple').textContent = coupleName(c);
-    setSeg('slip-type', sel.type);
-    $('slip-dur').hidden = sel.type !== 'dur';
-    $('slip-marry').hidden = sel.type !== 'marry';
-    setSeg(sel.type === 'dur' ? 'slip-side' : 'slip-yn', sel.side);
+    setSeg('slip-side', sel.side);
+    $('slip-dur').hidden = sel.side === 'yes';
 
     var mk = slipMk(sel), problem = '';
     var cs = state.stats && state.stats.couples[c.id];
@@ -850,25 +859,23 @@
       var u = UNITS[sel.u] || UNITS.m;
       problem = sel.n === '' ? 'Enter how many ' + u.many + '.' : 'Enter a whole number from 1 to ' + u.max + '.';
       $('slip-explain').textContent = '';
+    } else if (mk === 'wed') {
+      $('slip-explain').textContent = 'Wins if they get married. Loses if they break up first.';
     } else {
-      if (mk === 'marry') {
-        $('slip-explain').textContent = sel.side === 'yes' ? 'Wins if they get married.' : 'Wins if they break up without getting married.';
-        if (c.marriedOn) problem = 'They are already married.';
-      } else {
-        var th = threshold(c, mk);
-        $('slip-explain').textContent = sel.side === 'over'
-          ? 'Wins if they are still together after ' + fmtDate(th) + '.'
-          : 'Wins if they break up on or before ' + fmtDate(th) + '.';
-        if (!canBetNow(c, mk)) problem = 'They have already been together that long. Pick a longer time.';
-      }
+      var th = fmtDate(threshold(c, mk));
+      $('slip-explain').textContent = sel.side === 'over'
+        ? 'Wins if they are still together on ' + th + ' (a wedding also counts).'
+        : 'Wins if they break up on or before ' + th + '.';
+      if (!canBetNow(c, mk)) problem = 'That date has already passed. Pick a longer time.';
     }
-    var m = mk ? marketView(cs, c, mk) : null;
+    var pr = mk && cs ? cs.preds[predKey(mk, sel.side)] : null;
+    var mine = pr ? pr.total : 0, pot = cs ? cs.total : 0;
     $('slip-bucket').textContent = mk ? betLabel(mk, sel.side) : 'Your bet';
-    var pool = m ? m.pools[sel.side] : 0, total = m ? m.total : 0;
-    $('slip-odds').textContent = !mk ? '' : pool ? fmtOdds(total / pool) : 'New';
-    $('slip-pool').textContent = !mk ? '' : total
-      ? fmtPts(pool) + ' of ' + fmtPts(total) + ' on this side (' + fmtPct(pool / total) + ').'
-      : 'Nobody has bet on this line yet. If nobody takes the other side, you just get your points back.';
+    var u0 = mk ? upTo(c, cs, mk, sel.side, 0) : 0;
+    $('slip-odds').textContent = !mk ? '' : u0 ? 'up to ×' + fmtOdds(u0) : 'New';
+    $('slip-pool').textContent = !mk ? '' : pot
+      ? 'Pot of this couple: ' + fmtPts(pot) + '. On this bet: ' + fmtPts(mine) + ' (' + fmtPct(mine / pot) + ').'
+      : 'Nobody has bet on this couple yet. Winners only win points that others bet wrong.';
 
     var ready = state.betsStatus === 'ok' && !!state.stats;
     var stateMsg = state.betsStatus === 'off' ? 'Betting is not set up yet.'
@@ -882,17 +889,18 @@
     var me = state.profile && state.stats.players[state.profile.key];
     $('slip-profile').hidden = !!me;
     $('slip-me').hidden = !me;
-    var mine = 0;
+    var myPts = 0;
     if (me) {
       $('slip-me-name').textContent = me.name;
       $('slip-me-bal').textContent = fmtPts(me.balance) + ' available';
-      var other = mk ? sideOfPlayer(cs, mk, me.key) : '';
-      if (!problem && other && other !== sel.side) problem = 'You already backed ' + betLabel(mk, other) + '. You can only add points to that side.';
+      if (!problem && mk && hasOpposite(cs, mk, sel.side, me.key)) {
+        problem = 'You already bet ' + betLabel(mk, sel.side === 'over' ? 'under' : 'over') + '. You cannot bet both + and ' + MINUS + ' for the same time.';
+      }
       if (!problem && me.balance < 1) problem = 'You have no points left.';
-      if (m) m.list.forEach(function (r) { if (r.bet.k === me.key && r.bet.s === sel.side && r.status !== 'refunded') mine += r.bet.p; });
+      if (pr) pr.list.forEach(function (r) { if (r.bet.k === me.key) myPts += r.bet.p; });
     }
-    $('slip-mine').textContent = mine ? 'You have ' + fmtPts(mine) + ' on this side.' : '';
-    $('slip-mine').hidden = !mine;
+    $('slip-mine').textContent = myPts ? 'You have ' + fmtPts(myPts) + ' on this bet.' : '';
+    $('slip-mine').hidden = !myPts;
     $('slip-rule').textContent = problem;
     $('slip-rule').hidden = !problem;
     $('slip-go').disabled = state.placing || !!problem;
@@ -905,13 +913,10 @@
     var stake = Number($('slip-stake').value);
     if (!c || !mk || !Number.isInteger(stake) || stake < 1) {
       $('slip-return').textContent = '0 pts';
-      $('slip-after').textContent = '';
       return;
     }
-    var m = marketView(state.stats && state.stats.couples[c.id], c, mk);
-    var pool = m.pools[sel.side], total = m.total;
-    $('slip-return').textContent = fmtPts(Math.floor(stake * (total + stake) / (pool + stake)));
-    $('slip-after').textContent = 'Odds after your bet: ' + fmtOdds((total + stake) / (pool + stake)) + '. They keep moving as others bet.';
+    var mult = upTo(c, state.stats && state.stats.couples[c.id], mk, sel.side, stake);
+    $('slip-return').textContent = 'up to ' + fmtPts(Math.floor(stake * mult));
   }
 
   async function placeBet(ev) {
@@ -935,7 +940,7 @@
     try {
       await betsTxn(async function (latest) {
         var c = findCouple(c0.id);
-        if (!c || !canBetNow(c, mk)) throw userErr('Betting on this line is closed.');
+        if (!c || !canBetNow(c, mk)) throw userErr('Betting on this is closed.');
         var key, player;
         if (prof) {
           key = prof.key;
@@ -956,8 +961,7 @@
         var S = computeStats(state.data, latest);
         var me = S.players[key];
         if (stake > me.balance) throw userErr('You only have ' + fmtPts(Math.max(0, me.balance)) + ' available.');
-        var other = sideOfPlayer(S.couples[c.id], mk, key);
-        if (other && other !== side) throw userErr('You already backed ' + betLabel(mk, other) + '. You can only add points to that side.');
+        if (hasOpposite(S.couples[c.id], mk, side, key)) throw userErr('You already bet ' + betLabel(mk, side === 'over' ? 'under' : 'over') + '. You cannot bet both + and ' + MINUS + ' for the same time.');
         latest.bets.push({ id: newId(), c: c.id, m: mk, s: side, p: stake, k: key, t: Date.now() });
         return latest;
       });
@@ -1208,8 +1212,8 @@
     state.data.couples.slice().sort(function (x, y) { return x.since < y.since ? 1 : x.since > y.since ? -1 : 0; })
       .forEach(function (c) {
         var cs = state.stats && state.stats.couples[c.id];
-        var info = c.status === 'active' ? 'Live since ' + fmtDate(c.since) : 'Broke up on ' + fmtDate(c.endedOn);
-        if (c.marriedOn) info += ' · married';
+        var info = c.status === 'active' ? 'Together since ' + fmtDate(c.since) : 'Broke up on ' + fmtDate(c.endedOn);
+        if (c.marriedOn) info += ' · married on ' + fmtDate(c.marriedOn);
         if (cs && cs.list.length) info += ' · ' + cs.list.length + (cs.list.length === 1 ? ' bet' : ' bets');
         box.appendChild(el('div', { class: 'admin-item' }, [
           el('div', null, [el('div', { class: 'names', text: coupleName(c) }), el('div', { class: 'meta', text: info })]),
@@ -1232,6 +1236,7 @@
     $('f-married-on').max = toISO(today());
     $('f-ended-wrap').hidden = true;
     $('f-married-wrap').hidden = true;
+    $('f-outcome').hidden = true;
     $('form-title').textContent = 'Add couple';
     $('f-save').textContent = 'Add couple';
     $('f-cancel').hidden = true;
@@ -1251,7 +1256,7 @@
     $('f-married').checked = !!c.marriedOn;
     $('f-married-on').value = c.marriedOn;
     $('f-married-wrap').hidden = !c.marriedOn;
-    $('f-note').value = c.note;
+    $('f-outcome').hidden = false;
     $('form-title').textContent = 'Edit couple';
     $('f-save').textContent = 'Save changes';
     $('f-cancel').hidden = false;
@@ -1273,8 +1278,10 @@
     ev.preventDefault();
     var todayISO = toISO(today());
     var a = cleanText($('f-a').value, 60), b = cleanText($('f-b').value, 60);
-    var since = $('f-since').value, status = $('f-status').value, ended = $('f-ended').value;
-    var married = $('f-married').checked, marriedOn = $('f-married-on').value;
+    var id = $('f-id').value, editing = !!id;
+    // Adding a couple only needs the names and the dating date. What happened is set later, on Edit.
+    var since = $('f-since').value, status = editing ? $('f-status').value : 'active', ended = $('f-ended').value;
+    var married = editing && $('f-married').checked, marriedOn = $('f-married-on').value;
     var err = !a || !b ? 'Enter both names.'
       : !isISODate(since) ? 'Enter the date they got together.'
       : since > todayISO ? 'The start date cannot be in the future.'
@@ -1287,8 +1294,7 @@
       : married && status === 'ended' && marriedOn > ended ? 'The wedding date cannot be after the break-up date.'
       : '';
     if (err) { setMsg('form-msg', err, 'error'); return; }
-    var id = $('f-id').value;
-    var couple = normCouple({ id: id || newId(), a: a, b: b, since: since, note: $('f-note').value,
+    var couple = normCouple({ id: id || newId(), a: a, b: b, since: since,
       status: status, endedOn: status === 'ended' ? ended : '', marriedOn: married ? marriedOn : '' });
     var done = (id ? 'Saved ' : 'Added ') + coupleName(couple) + '.';
     resetForm();
@@ -1557,20 +1563,7 @@
   $('search').addEventListener('input', function () { state.query = this.value.trim(); renderBook(); });
 
   $('slip-close').addEventListener('click', function () { state.selection = null; renderBook(); renderSlip(); });
-  $('slip-type').addEventListener('click', function (e) {
-    var b = e.target.closest('button');
-    if (!b || !state.selection) return;
-    var t = b.getAttribute('data-v');
-    if (t === state.selection.type) return;
-    state.selection = t === 'marry'
-      ? { id: state.selection.id, type: 'marry', side: 'yes' }
-      : { id: state.selection.id, type: 'dur', side: 'over', n: '', u: 'm' };
-    syncSlipInputs();
-    setMsg('slip-msg', '');
-    renderBook();
-    renderSlip();
-  });
-  ['slip-side', 'slip-yn'].forEach(function (id) {
+  ['slip-side'].forEach(function (id) {
     $(id).addEventListener('click', function (e) {
       var b = e.target.closest('button');
       if (!b || !state.selection) return;

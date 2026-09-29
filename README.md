@@ -1,6 +1,6 @@
 # Break365
 
-Private betting board on how long couples will last. Players make their own bets (**+4 months**, **−3 weeks**, **will they marry?**) and the odds move with every bet, like Twitch predictions. Static site for GitHub Pages; everything is encrypted.
+Private betting board on how long couples will last. Players make their own bets (**+4 months**, **−3 weeks**, **Married**) and the odds move with every bet, like Twitch predictions. Static site for GitHub Pages; everything is encrypted.
 
 Players never touch GitHub: they open the site, type the player password, pick a name and a PIN, and bet.
 
@@ -18,22 +18,22 @@ When **updating** a live site, upload only `index.html`, `style.css`, `app.js`, 
 ## How betting works
 
 - Everyone starts with the same points (1,000 by default, set in Admin > Points).
-- A **line** is a time counted from the day the couple got together: 3 weeks, 4 months, 2 years... Any player can create one with **Make your own bet**.
-- Each line has two sides:
-  - **+** they are still together after that date,
-  - **−** they break up on or before it.
-- **Marriage** is a line too: **Yes** they get married, **No** they break up without marrying.
-- **Odds** of a side = all points on the line ÷ points on that side. Example: 100 on +4 months and 300 on −4 months: + pays 4.00, − pays 1.33.
-- When a line is decided, the winning side splits all the points on that line, in proportion to what each person bet.
-- If nobody took the other side, winners just get their points back. So pick lines other people are already betting on (the most popular ones are shown first on each couple).
-- One side per line per player. You can add more points to your side, and bet on as many lines as you like.
+- A player picks one of three bets on a couple:
+  - **+ Together**: they stay together for at least X weeks, months or years (the player chooses X),
+  - **− Together**: they break up in less than X weeks, months or years (the player chooses X),
+  - **Married**: they get married.
+- All bets on a couple go into **one pot**. When the couple is settled, everyone who got it right gets their points back plus a share of the wrong bets, in proportion to what they bet.
+  Example: 100 on +4 months, 300 on −4 months, 100 on Married. They break up after 2 months: only −4 months is right, so its bettors get their 300 back plus the 200 from the others (×1.67).
+- Each bet shows its points, its share of the pot and **up to ×**: the most each point can return if it comes true, given the bets so far. It changes live as people bet.
+- You can place as many bets as you like, but not **+** and **−** for the same time.
+- If nobody got it right, everyone gets their points back.
 
-Lines are decided automatically from the dates the admin enters:
+When the couple is settled (the admin records it with **Edit**):
 
-- A **+** line wins as soon as they are still together the day after its date.
-- When the admin marks the couple as broken up, every open line is decided: **−** wins if the break-up date is on or before the line date.
-- **Marriage: Yes** wins when the admin ticks "They got married". **No** wins when they break up unmarried.
-- Bets placed on or after the day that decided a line are refunded (so nobody profits from news before the admin updates the couple).
+- **Break-up**: every **+X** whose date is after the break-up wins, every **−X** whose date is on or after it wins, **Married** loses.
+- **Wedding**: **Married** and every **+** bet win, every **−** bet loses. The couple moves to **Settled**.
+- A **+X** or **−X** can only be placed while its date is still in the future. Once the date passes, the card shows it as already true or lost; points are paid when the couple is settled.
+- Bets placed on or after the break-up or wedding day are refunded (so nobody profits from news before the admin updates the couple).
 - Deleting a couple cancels its bets and returns the points.
 
 ## One-time setup (site owner, about 10 minutes)
@@ -57,8 +57,8 @@ The page refuses a public repository, the site repository, or the admin token he
 
 ## Admin, day to day
 
-- **Add couple**: names and the date they got together. No odds to set.
-- **Broke up**: Edit > Status *Broken up* > date > save. Lines are decided and points paid out automatically.
+- **Add couple**: Name 1, Name 2 and the date they started dating. Nothing else.
+- **Broke up**: Edit > Status *Broken up* > date > save. Bets are settled and points paid out automatically.
 - **Married**: Edit > tick *They got married* > date > save.
 - Every change publishes by itself; the bar at the top says **All changes published**.
 - On a couple's bet list, **×** deletes a bet (points go back). In **Ranking**, **Reset PIN** lets a player who forgot their PIN choose a new one (points and bets stay).
@@ -66,7 +66,7 @@ The page refuses a public repository, the site repository, or the admin token he
 ## Players
 
 1. Open the site, type the player password.
-2. Tap a side of an existing line, or **Make your own bet**: choose **+ More than** or **− Less than**, the number and weeks, months or years (or the Marriage tab).
+2. Tap a bet that already exists on a couple, or **Make your own bet**: choose **+ Together**, **− Together** or **Married**; for + and − also pick the number and weeks, months or years.
 3. First time: pick a name and a 4 to 8 digit PIN. The device remembers it; use the same name and PIN on other devices.
 4. Choose the stake and **Place bet**. Odds on every card update every 10 seconds.
 5. **Ranking** shows everyone's points.
